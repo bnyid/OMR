@@ -1,0 +1,36 @@
+# Python 바이트 코드
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 가상환경
+venv/
+env/
+.env/
+.venv/
+
+# IDE 설정 파일
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 배포 파일
+dist/
+build/
+*.egg-info/
+
+# 로컬 개발 설정
+.env
+.env.local
+
+# 로그 파일
+*.log
+
+# 데이터베이스
+*.db
+*.sqlite3
+
+# 시스템 파일
+.DS_Store
+Thumbs.db
