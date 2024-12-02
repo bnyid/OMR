@@ -4,12 +4,14 @@ import pandas as pd
 from skew_correction import correct_skew  # correct_skew 함수가 있는 파일에서 import
 
 
-def find_large_contours(gray_image, min_area):
+def find_large_contours(gray_image, min_area, show_result=False):
     """그레이스케일 이미지에서 지정된 최소 면적보다 큰 외곽선들을 찾아 반환합니다.
+    외곽선은 왼쪽에서 오른쪽 순서로 정렬됩니다.
 
     Args:
         gray_image (numpy.ndarray): 그레이스케일로 변환된 입력 이미지
         min_area (float): 검출할 외곽선의 최소 면적 (픽셀 단위)
+        show_result (bool): 결과를 시각화할지 여부 (기본값: False)
 
     Returns:
         list 또는 None: 다음 세 가지 경우 중 하나를 반환합니다:
@@ -40,40 +42,33 @@ def find_large_contours(gray_image, min_area):
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) # 모든 외곽선 찾기
     filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area] # 최소 면적보다 큰 외곽선만 필터링
 
+    # 외곽선을 x좌표 기준으로 정렬
+    if filtered_contours:
+        # 각 외곽선의 중심점 x좌표를 기준으로 정렬
+        sorted_contours = sorted(filtered_contours, 
+                               key=lambda c: cv2.moments(c)['m10']/cv2.moments(c)['m00'])
+        filtered_contours = sorted_contours
+
+    if show_result and filtered_contours:
+        # 원본 컬러 이미지 가져오기 (그레이스케일을 3채널로 변환)
+        display_image = cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
+        color = (0, 0, 255)  # 빨간색
+
+        # 외곽선 그리기 및 인덱스 표시
+        for i, contour in enumerate(filtered_contours):
+            cv2.drawContours(display_image, [contour], -1, color, 2)
+            
+            # 외곽선의 중심 좌표 계산
+            M = cv2.moments(contour)
+            if M['m00'] != 0:
+                cX = int(M['m10'] / M['m00'])
+                cY = int(M['m01'] / M['m00'])
+                cv2.putText(display_image, str(i), (cX, cY), 
+                          cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 100, 255), 5)
+
+        # 결과 표시
+        cv2.imshow('Contours', display_image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
     return filtered_contours
-
-
-if __name__ == "__main__":
-    
-    ############################################################ Parameters
-    
-    image = cv2.imread('OMR.png') 
-    corrected_image = correct_skew(image)
-    gray_image = cv2.cvtColor(corrected_image, cv2.COLOR_BGR2GRAY)
-    min_area = 100000
-
-    corrected_image_copy = corrected_image.copy() # 그려서 보여주는 용 복사본
-
-    ############################################################    
-
-    contours = find_large_contours(gray_image, min_area)
-    
-    color = (0,0,255) # 외곽선을 그려서 보여줄 때, 외곽선의 색깔은 빨간색으로 설정한다.
-
-    # 모든 외곽선을 그리고 인덱스를 붙여서 각 외곽선을 확인하기
-    for i, contour in enumerate(contours):
-        # 외곽선 그리기
-        cv2.drawContours(corrected_image_copy, [contour], -1, color, 2) # 원본 이미지의 복사본에 외곽선을 그린다.
-        
-        # 외곽선의 중심 좌표 계산
-        M = cv2.moments(contour)
-        if M['m00'] != 0:
-            cX = int(M['m10'] / M['m00'])
-            cY = int(M['m01'] / M['m00'])
-            # 인덱스 표시
-            cv2.putText(corrected_image_copy, str(i), (cX, cY), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 100, 255), 5) # 복사본에 인덱스를 표시한다.
-
-    # 이미지 표시
-    cv2.imshow('Contours', corrected_image_copy)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
