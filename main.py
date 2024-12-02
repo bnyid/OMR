@@ -4,7 +4,7 @@ import pandas as pd
 from find_contours import find_large_contours
 from get_area import get_omr_area_image, extract_marking_area
 from skew_correction import correct_skew
-from analyze_id_marking import analyze_fixed_id_marking
+from recognize_marking import recognize_marking
 from convert_data import convert_marking_to_number, convert_marking_to_hangul, convert_pdf_to_image, create_student_dataframe
 
 # 파일 경로
@@ -43,10 +43,10 @@ id_area = get_omr_area_image(id_contour, gray_image, show_result=False) # OMR �
 id_marking_area = extract_marking_area(id_area, 
                                      skip_x=(False, 0, 0),
                                      skip_y=(True, 170, 80000),
-                                     show_result=False) # 순수 마킹 영역만 추출하는 함수
+                                     show_result=True) # 순수 마킹 영역만 추출하는 함수
 
 #마킹 결과 인식
-id_marking_result = analyze_fixed_id_marking(id_marking_area,
+id_marking_result = recognize_marking(id_marking_area,
                         start_point=(5,5), #시작 좌표
                         rows=10,cols=10, cell_size=(100.25, 60),  # 행x열 & 셀 크기
                         first_row_height=60, first_row_gap=20,  # 첫 행 높이 & 첫 행과 두 번째 행 사이의 여백
@@ -68,7 +68,7 @@ name_marking_area = extract_marking_area(name_area,
                                          show_result=False) # 순수 마킹 영역만 추출하는 함수
 
 
-name_marking_result = analyze_fixed_id_marking(name_marking_area,    # 실제 체크된 영역 인식 함수
+name_marking_result = recognize_marking(name_marking_area,    # 실제 체크된 영역 인식 함수
                         start_point=(24,2), #시작 좌표(y,x) * OpenCV에서는 이미지 좌표계가 y,x 순임
                         rows=21,cols=12, cell_size=(50,60),  # 행x열 & 셀 크기(y,x)
                         first_row_height=50, first_row_gap=0,  # 첫 행 높이 & 첫 행과 두 번째 행 사이의 여백
@@ -83,7 +83,7 @@ print(name_result)
 # 정답 영역1 처리
 answer_1_area = get_omr_area_image(answer_contours_1, gray_image, show_result=False) # 외곽선 좌표를 받아 이미지 영역 추출
 answer_1_marking_area = extract_marking_area(answer_1_area, show_result=False) # 이미지에서 순수 마킹 영역만 추출
-answer_1_marking_result = analyze_fixed_id_marking(answer_1_marking_area, # 마킹 영역에 대해서 격자 및 ROI 설정하여 마킹된 부분을 인식
+answer_1_marking_result = recognize_marking(answer_1_marking_area, # 마킹 영역에 대해서 격자 및 ROI 설정하여 마킹된 부분을 인식
                         start_point=(4.5,17.5),
                         rows=15,cols=5, cell_size=(99.9, 60),
                         first_row_height=85.5, first_row_gap=6.5,
@@ -99,7 +99,7 @@ print(answer_1_result)
 # 정답 영역2 처리
 answer_2_area = get_omr_area_image(answer_contours_2, gray_image, show_result=False) # 외곽선 좌표를 받아 이미지 영역 추출
 answer_2_marking_area = extract_marking_area(answer_2_area, show_result=False) # 이미지에서 순수 마킹 영역만 추출
-answer_2_marking_result = analyze_fixed_id_marking(answer_2_marking_area, # 마킹 영역에 대해서 격자 및 ROI 설정하여 마킹된 부분을 인식
+answer_2_marking_result = recognize_marking(answer_2_marking_area, # 마킹 영역에 대해서 격자 및 ROI 설정하여 마킹된 부분을 인식
                         start_point=(4.5,15),
                         rows=15,cols=5, cell_size=(99.9, 60),
                         first_row_height=85.5, first_row_gap=6.5,
@@ -121,7 +121,7 @@ answer_3_marking_area = extract_marking_area(answer_3_area,
                                            show_result=False) 
 
 # 마킹 영역에 대해서 격자 및 ROI 설정하여 마킹된 부분을 인식
-answer_3_marking_result = analyze_fixed_id_marking(answer_3_marking_area, # 마킹 영역에 대해서 격자 및 ROI 설정하여 마킹된 부분을 인식
+answer_3_marking_result = recognize_marking(answer_3_marking_area, # 마킹 영역에 대해서 격자 및 ROI 설정하여 마킹된 부분을 인식
                         start_point=(4.5,15),
                         rows=5,cols=5, cell_size=(100, 60.5),
                         first_row_height=90, first_row_gap=5,

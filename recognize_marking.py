@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def analyze_fixed_id_marking(marking_area_image,
+def recognize_marking(marking_area_image,
                             start_point=(1, 1),
                             rows=10, cols=10,
                             cell_size=(66.5, 40),
