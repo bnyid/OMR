@@ -1,11 +1,10 @@
 import cv2
 import numpy as np
 import pandas as pd
-from find_contours import find_large_contours
-from get_area import get_omr_area_image, extract_marking_area
+from get_area import get_coordinates_from_large_contours, get_omr_area_image, extract_marking_area
 from skew_correction import correct_skew
 from recognize_marking import recognize_marking
-from convert_data import convert_marking_to_number, convert_marking_to_hangul, convert_pdf_to_image, create_student_dataframe
+from data_precessing import convert_marking_to_number, convert_marking_to_hangul, convert_pdf_to_image, create_student_dataframe
 
 # 파일 경로
 file_path = 'OMR_TEST.PDF'
@@ -28,7 +27,7 @@ print(f"이미지 크기: {image.shape[1]} x {image.shape[0]} 픽셀")  # 너비
 
 corrected_image = correct_skew(image)  # 기울임 보정
 gray_image = cv2.cvtColor(corrected_image, cv2.COLOR_BGR2GRAY)  # 이미지를 그레이 스케일로(회색으로) 변환
-contours = find_large_contours(gray_image, 200000, show_result=False)  # 보정된 회색 이미지와 설정된 최소 면적(100000)을 기준으로 주요 외곽선 추출
+contours = get_coordinates_from_large_contours(gray_image, 200000, show_result=False)  # 보정된 회색 이미지와 설정된 최소 면적(100000)을 기준으로 주요 외곽선 추출
 
 
 # 외곽선을 영역별로 매칭

@@ -5,7 +5,7 @@ import pandas as pd
 
 
 def convert_pdf_to_image(pdf_path):
-    """PDF 파일을 이미지로 변환"""
+    """PDF를 -> 처리가능한 BGR 이미지로 변환"""
     try:
         # PDF 파일 열기
         pdf_document = fitz.open(pdf_path)
@@ -30,7 +30,7 @@ def convert_pdf_to_image(pdf_path):
 
 def convert_marking_to_number(marking_result, read_by_column=False):
     """
-    마킹 결과를 숫자로 변환하는 함수
+    마킹 결과를 숫자 문자열로 변환하는 함수
     
     Args:
         marking_result: 마킹 결과 2D 배열(행x열)
