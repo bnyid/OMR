@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h3>학생 상세 정보</h3>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table">
+                    <tr>
+                        <th width="30%">학번</th>
+                        <td>{{ student.student_id }}</td>
+                    </tr>
+                    <tr>
+                        <th>이름</th>
+                        <td>{{ student.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>소속반</th>
+                        <td>{{ student.class_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>학교구분</th>
+                        <td>{{ student.get_school_type_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>학년</th>
+                        <td>{{ student.grade }}학년</td>
+                    </tr>
+                    <tr>
+                        <th>학교명</th>
+                        <td>{{ student.school_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>연락처</th>
+                        <td>{{ student.phone_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>보호자 연락처</th>
+                        <td>{{ student.parent_phone }}</td>
+                    </tr>
+                    <tr>
+                        <th>등록일</th>
+                        <td>{{ student.registered_date }}</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h5>비고</h5>
+                <p>{{ student.note|linebreaks }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>OMR 시험 결과 목록</h3>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>시험 날짜</th>
+                        <th>반</th>
+                        <th>처리일시</th>
+                        <th>관리</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in omr_results %}
+                    <tr>
+                        <td>{{ result.exam_date }}</td>
+                        <td>{{ result.class_code }}</td>
+                        <td>{{ result.created_at|
+</file> 

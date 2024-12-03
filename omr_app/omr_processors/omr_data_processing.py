@@ -152,19 +152,53 @@ def convert_marking_to_hangul(marking_result, read_by_column=True):
 
 
 
-def create_student_dataframe(id_result, name_result, *answer_results):
-    # 학생 정보를 담을 리스트 초기화
+def create_student_dataframe(student_id, student_name, answers):
+    """
+    학생의 답안을 DataFrame으로 변환하는 함수
+    
+    Args:
+        student_id: 학번
+        student_name: 이름
+        answers: 답안 문자열
+        
+    Returns:
+        pandas.DataFrame: 각 문제별로 행이 생성된 DataFrame
+    """
     data = []
     
-    # 각 답안에 대해 반복
-    for answer_result in answer_results:
-        for answer in answer_result:
-            # 각 답안에 대해 학번, 이름, 답을 추가
-            data.append({'학번': id_result, '이름': name_result, '답': answer})
+    # 각 답안을 개별 행으로 변환
+    for i, answer in enumerate(answers, start=1):
+        data.append({
+            '학번': student_id,
+            '이름': student_name,
+            '문항': i,
+            '답': answer
+        })
     
     # DataFrame 생성
     df = pd.DataFrame(data)
     return df
+
+
+def handle_image_file(image_file):
+    """
+    이미지 파일을 처리하여 OpenCV 이미지로 변환하는 함수
+    
+    Args:
+        image_file: Django의 UploadedFile 객체
+        
+    Returns:
+        numpy.ndarray: OpenCV 이미지 객체 또는 변환 실패시 None
+    """
+    try:
+        if image_file.name.lower().endswith('.pdf'):
+            return convert_pdf_to_image(image_file)
+        else:
+            image_array = np.frombuffer(image_file.read(), np.uint8)
+            return cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+    except Exception as e:
+        print(f"이미지 처리 중 오류 발생: {e}")
+        return None
 
 
 

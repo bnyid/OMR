@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2>OMR 결과 목록</h2>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <select name="exam_date" class="form-select">
+                    <option value="">시험 날짜 선택</option>
+                    {% for date in exam_dates %}
+                        <option value="{{ date|date:'Y-m-d' }}" {% if request.GET.exam_date == date|date:'Y-m-d' %}selected{% endif %}>
+                            {{ date|date:'Y-m-d' }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="class_code" class="form-select">
+                    <option value="">반 선택</option>
+                    {% for code in class_codes %}
+                        <option value="{{ code }}" {% if request.GET.class_code == code %}selected{% endif %}>
+                            {{ code }}반
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="student_id" class="form-control" placeholder="학번 검색" 
+                       value="{{ request.GET.student_id|default:'' }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary">검색</button>
+                <a href="{% url 'omr_app:omr_result_list' %}" class="btn btn-secondary">초기화</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>시험 날짜</th>
+                <th>반</th>
+                <th>학번</th>
+                <th>이름</th>
+                <th>처리일시</th>
+                <th>관리</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
+            <tr>
+                <td>{{ result.exam_date }}</td>
+                <td>{{ result.class_code }}</td>
+                <td>{{ result.student_id }}</td>
+                <td>{{ result.student_name }}</td>
+                <td>{{ result.created_at|date:'Y-m-d H:i' }}</td>
+                <td>
+                    <a href="{% url 'omr_app:omr_result_detail' result.id %}" 
+                       class="btn btn-sm btn-info">상세보기</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %} 
