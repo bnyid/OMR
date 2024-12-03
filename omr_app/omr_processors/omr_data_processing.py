@@ -46,7 +46,7 @@ def convert_marking_to_number(marking_result, read_by_column=False):
         for col in range(marking_result.shape[1]):
             for row in range(marking_result.shape[0]):
                 if marking_result[row][col] == 1:
-                    result.append(str(row + 1))  # 1을 더해서 1부터 시작하도록 수정
+                    result.append(str(row))  # 열 기준의 경우 0부터 시작하므로 그대로 추가
                     break
             else:
                 result.append('X')
@@ -56,7 +56,7 @@ def convert_marking_to_number(marking_result, read_by_column=False):
         for row in range(marking_result.shape[0]):
             for col in range(marking_result.shape[1]):
                 if marking_result[row][col] == 1:
-                    result.append(str(col + 1))  # 1을 더해서 1부터 시작하도록 수정
+                    result.append(str(col + 1))  # 행 기준의 경우 1부터 시작하므로 1을 더하여 추가
                     break
             else:
                 result.append('X')  # 마킹이 없는 경우
@@ -182,13 +182,13 @@ def create_student_dataframe(student_id, student_name, answers):
 
 def handle_image_file(image_file):
     """
-    이미지 파일을 처리하여 OpenCV 이미지로 변환하는 함수
+    이미지 파일을 처리하여 OpenCV BGR 이미지로 변환하는 함수
     
     Args:
         image_file: Django의 UploadedFile 객체
         
     Returns:
-        numpy.ndarray: OpenCV 이미지 객체 또는 변환 실패시 None
+        numpy.ndarray: OpenCV BGR 이미지 객체 또는 변환 실패시 None
     """
     try:
         if image_file.name.lower().endswith('.pdf'):

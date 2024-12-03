@@ -62,10 +62,14 @@ def get_coordinates_from_large_contours(gray_image, min_area, show_result=False)
                 cX = int(M['m10'] / M['m00'])
                 cY = int(M['m01'] / M['m00'])
                 cv2.putText(display_image, str(i), (cX, cY), 
-                          cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 100, 255), 5)
+                          cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 100, 255), 2)
 
+        # 이미지 크기 조절
+        height, width = display_image.shape[:2]
+        resized_image = cv2.resize(display_image, (width//2, height//2))  # 50% 크기로 조절
+        
         # 결과 표시
-        cv2.imshow('Contours', display_image)
+        cv2.imshow('Contours', resized_image)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 

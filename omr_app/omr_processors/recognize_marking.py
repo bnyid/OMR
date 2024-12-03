@@ -5,8 +5,8 @@ def recognize_marking(marking_area_image,
                             start_point=(1, 1),
                             rows=10, cols=10,
                             cell_size=(66.5, 40),
-                            first_row_height=45,
-                            first_row_gap=11,
+                            first_row_height=None,
+                            first_row_gap=0,
                             roi_size=(20, 25),
                             threshold=0.3,
                             show_result=False
@@ -27,6 +27,8 @@ def recognize_marking(marking_area_image,
     - threshold: 마킹으로 인식할 검은 픽셀 비율의 임계값 - 기본값 0.35
     - show_result: 분석 결과를 시각화할지 여부 (기본값: False)
     """
+    if first_row_height is None:
+        first_row_height = cell_size[0]
 
     # 시작점 좌표를 정수로 변환
     # map(함수, 반복가능객체) : 반복가능객체의 각 요소에 함수를 적용하여, 새로운 반복가능객체를 map객체로 반환

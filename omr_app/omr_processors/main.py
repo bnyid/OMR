@@ -13,22 +13,36 @@ def process_omr_image(image):
     corrected_image = correct_skew(image)
     gray_image = cv2.cvtColor(corrected_image, cv2.COLOR_BGR2GRAY)
     contours = get_coordinates_from_large_contours(gray_image, 200000, show_result=False)
-
+    
+    # contours 개수 확인
+    if len(contours) < 5:  # 필요한 최소 contour 개수를 5개로 수정
+        raise ValueError(f"필요한 영역을 찾을 수 없습니다. (발견된 영역: {len(contours)}개, 필요한 영역: 5개)")
+    
     # 시험 시행일과 반코드 영역 처리
     date_class_area = get_omr_area_image(contours[0], gray_image, show_result=False)
     date_class_marking_area = extract_marking_area(date_class_area, 
                                          skip_x=(False, 0, 0),
-                                         skip_y=(True, 170, 80000),
+                                         skip_y=(True, 150, 60000),
                                          show_result=False)
     
     date_class_marking_result = recognize_marking(date_class_marking_area,
+                            start_point=(5,1),
+                            rows=10, cols=8,  # 8자리 (시행일 6자 + 반코드 2자)
+                            cell_size=(66.75, 40),
+                            first_row_height=40,
+                            first_row_gap=13,
+                            roi_size=(25,15),
+                            threshold=0.5,
+                            show_result=False)
+    
+    '''이전 파라미터 기록 (삭제금지)
                             start_point=(5,5),
                             rows=10, cols=8,  # 8자리 (시행일 6자 + 반코드 2자)
                             cell_size=(100.25, 60),
                             first_row_height=60,
                             first_row_gap=20,
                             roi_size=(30,23),
-                            show_result=False)
+    '''
     
     date_class_number = convert_marking_to_number(date_class_marking_result, read_by_column=True)
     exam_date = date_class_number[:6]  # 앞 6자리는 시행일
@@ -38,38 +52,52 @@ def process_omr_image(image):
     id_area = get_omr_area_image(contours[1], gray_image, show_result=False)
     id_marking_area = extract_marking_area(id_area, 
                                          skip_x=(False, 0, 0),
-                                         skip_y=(True, 170, 80000),
+                                         skip_y=(True, 150, 60000),
                                          show_result=False)
     
     id_marking_result = recognize_marking(id_marking_area,
+                            start_point=(5,0),
+                            rows=10, cols=8,
+                             cell_size=(66.75, 40),
+                            first_row_height=40,
+                            first_row_gap=13,
+                            roi_size=(25,15),
+                            threshold=0.5,
+                            show_result=False)
+    
+    '''이전 파라미터 기록 (삭제금지)
                             start_point=(5,5),
                             rows=10, cols=10,
-                            cell_size=(100.25, 60),
+                            cell_size=(100, 60.5),
                             first_row_height=60,
                             first_row_gap=20,
                             roi_size=(30,23),
-                            show_result=False)
-    
+    '''
 
 
     # 이름 영역 처리
     name_area = get_omr_area_image(contours[2], gray_image, show_result=False)
     name_marking_area = extract_marking_area(name_area, 
                                            skip_x=(False, 0, 0),
-                                           skip_y=(True, 150, 80000),
+                                           skip_y=(True, 100, 60000),
                                            show_result=False)
     
     name_marking_result = recognize_marking(name_marking_area,
+                            start_point=(17,1),
+                            rows=21, cols=12,
+                            cell_size=(33.35,40),
+                            roi_size=(22,15),
+                            threshold=0.5,
+                            show_result=True)
+    
+    ''' 이전 파라미터 기록 (삭제금지)
                             start_point=(24,2),
                             rows=21, cols=12,
                             cell_size=(50,60),
                             first_row_height=50,
                             first_row_gap=0,
                             roi_size=(33,20),
-                            threshold=0.3,
-                            show_result=False)
-    
-
+    '''
 
     # 답안 영역 처리
     answer_params = [
@@ -90,15 +118,6 @@ def process_omr_image(image):
             'first_row_gap': 6.5,
             'skip_params': (False, 0, 0),
             'start_number': 16  # 16번부터 시작
-        },
-        {
-            'start_point': (4.5,15),
-            'rows': 5, 'cols': 5,
-            'cell_size': (100, 60.5),
-            'first_row_height': 90,
-            'first_row_gap': 5,
-            'skip_params': (True, 50, 100000),
-            'start_number': 31  # 31번부터 시작
         }
     ]
 

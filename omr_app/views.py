@@ -23,7 +23,11 @@ def omr_process(request):
             if image is None:
                 return JsonResponse({'status': 'error', 'message': '이미지 변환 실패'}, status=400)
 
-            result_df = process_omr_image(image)
+            try:
+                result_df = process_omr_image(image)
+            except Exception as e:
+                print(f"process_omr_image 오류: {str(e)}")
+                return JsonResponse({'status': 'error', 'message': f'OMR 처리 중 오류: {str(e)}'}, status=400)
             
             result = OMRResult.objects.create(
                 exam_date=f"20{result_df['시행일'].iloc[0]}",
@@ -47,6 +51,7 @@ def omr_process(request):
             })
 
         except Exception as e:
+            print(f"전체 처리 오류: {str(e)}")
             return JsonResponse({
                 'status': 'error',
                 'message': str(e)

@@ -44,10 +44,11 @@ def correct_skew(image):
         
         if len(filtered_angles) > 0:
             median_angle = np.median(filtered_angles)
-            print(f"감지된 모든 각도들: {angles}")  # 디버깅용 출력 추가
-            print(f"필터링된 각도들: {filtered_angles}")  # 디버깅용 출력 추가
-            print(f"감지된 기울기: {median_angle:.2f}도")
-            print(f"보정할 각도: {-median_angle:.2f}도")
+            print(f"skew_correction_debug: 감지된 모든 각도들의 개수: {len(angles)}")  # 디버깅용 출력 추가
+            print(f"skew_correction_debug: 필터링된 각도들의 개수: {len(filtered_angles)}")  # 디버깅용 출력 추가
+            # print(f"skew_correction_debug: 필터링된 각도들: {filtered_angles}")  # 디버깅용 출력 추가
+            print(f"skew_correction_debug: 감지된 기울기: {median_angle:.2f}도")
+            print(f"skew_correction_debug: 보정할 각도: {-median_angle:.2f}도")
             
             # 원본 이미지 회전
             center = (image.shape[1] // 2, image.shape[0] // 2)
@@ -56,7 +57,7 @@ def correct_skew(image):
                                     flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
             return rotated
     
-    print("기울기가 감지되지 않았습니다.")
+    
     return image
 
 if __name__ == "__main__":
