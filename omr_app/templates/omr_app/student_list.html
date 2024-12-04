@@ -14,18 +14,36 @@
   .editing {
     padding: 0 !important;
   }
-  .editing input,
-  .editing select {
+  /* 입력 필드와 select 요소 스타일 수정 */
+  .form-control-sm,
+  select.form-control-sm,
+  input[type="date"].form-control-sm,
+  input[type="text"].form-control-sm {
     width: 100%;
-    height: 100%;
+    min-width: 80px;
+    height: 31px !important;
     border: 1px solid #0d6efd;
-    padding: 0.375rem 0.75rem;
+    padding: 0.25rem 0.5rem;
+    text-align: center !important;
   }
-  /* 테이블 가운데 정렬을 위한 스타일 추가 */
+  /* 테이블 가운데 정렬을 위한 스타일 */
   .table th,
   .table td {
     text-align: center;
     vertical-align: middle;
+    white-space: nowrap;
+    height: 31px !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+  /* 버튼 컨테이너 스타일 */
+  .button-container {
+    white-space: nowrap;
+  }
+  /* 버튼 크기 조정 */
+  .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.2;
   }
 </style>
 
@@ -118,7 +136,7 @@
             <td class="editable" data-field="note">
               {{ student.note|default:'-' }}
             </td>
-            <td>
+            <td class="button-container">
               <a
                 href="{% url 'omr_app:student_detail' student.id %}"
                 class="btn btn-sm btn-info me-1"
@@ -132,7 +150,7 @@
               </button>
               <button
                 type="button"
-                class="btn btn-sm btn-success save-row"
+                class="btn btn-sm btn-success me-1 save-row"
                 style="display: none"
               >
                 저장
