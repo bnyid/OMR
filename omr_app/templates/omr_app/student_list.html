@@ -23,8 +23,11 @@
     min-width: 80px;
     height: 31px !important;
     border: 1px solid #0d6efd;
-    padding: 0.25rem 0.5rem;
+    padding: 0.25rem 0.5rem !important;
     text-align: center !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    display: block !important;
   }
   /* 테이블 가운데 정렬을 위한 스타일 */
   .table th,
@@ -34,6 +37,14 @@
     white-space: nowrap;
     height: 31px !important;
     padding: 0.25rem 0.5rem !important;
+    box-sizing: border-box !important;
+    width: 1% !important; /* 셀 너비를 내용에 맞게 최소화 */
+  }
+  /* 편집 모드일 때의 td 스타일 */
+  .table td.editing {
+    padding: 0 !important;
+    height: 31px !important;
+    width: 1% !important;
   }
   /* 버튼 컨테이너 스타일 */
   .button-container {
