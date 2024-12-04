@@ -27,21 +27,24 @@
 </div>
 
 <script>
+  // form 제출 이벤트 리스너 추가 ("omrForm"이라는 id를 가진 form에 제출 이벤트가 발생하면 실행)
   document.getElementById("omrForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const resultDiv = document.getElementById("result");
+    e.preventDefault(); // 기본 동작 중단 (폼의 기본 제출 동작 방지 : 페이지 새로고침 방지)
+    const formData = new FormData(e.target); // 모든 입력값을 담기 위한 form 객체 선언 : e = 이벤트 객체, target = 이벤트 객체에 담긴 요소(여기서는 이미지 파일)
+    const resultDiv = document.getElementById("result"); // 결과를 표시할 div 요소를 선택함 ex. <div id="result"></div>를 찾아서 변수에 저장
 
     try {
       const response = await fetch('{% url "omr_app:omr_process" %}', {
-        method: "POST",
-        body: formData,
+        // omr_app의 omr_process 뷰를 호출하는 url로 요청을 보냄
+        method: "POST", // 요청 메소드는 POST
+        body: formData, // 요청할 데이터는 앞서 선언한 formData
       });
 
-      const data = await response.json();
+      const data = await response.json(); // 서버에서 받은 응답을 JSON 형식으로 파싱, 여기서 파싱이란 JSON 형식의 데이터를 자바스크립트 객체로 변환하는 것을 의미. JSON 형식의 데이터(문자열)는 키-값 쌍의 집합으로 구성되어 있으며, 이를 자바스크립트 객체로 변환하는 과정을 파싱이라고 함. await는 여기서 비동기 처리를 위한 키워드로, 비동기 처리를 기다리는 동안 다른 작업을 수행할 수 있도록 함.
 
       if (data.status === "success") {
-        resultDiv.innerHTML = `
+        //서버에서 데이터 처리가 성공적으로 완료되었을 경우 결과 표시 영역에 성공 메시지 표시
+        resultDiv.innerHTML = ` 
                 <div class="alert alert-success">
                     처리 완료!<br>
                     학생: ${data.data.student_name} (${data.data.student_id})<br>

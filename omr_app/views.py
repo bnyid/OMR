@@ -35,18 +35,18 @@ def omr_process(request):
                 student_id=result_df['학번'].iloc[0],
                 student_name=result_df['이름'].iloc[0],
                 answer_sheet=image_file,
-                answers=result_df.to_dict('records')
+                answers=result_df.to_dict('records') # 전체 result_df를 딕셔너리로 변환하여 저장(시행일부터 답안까지) 
             )
 
             return JsonResponse({
-                'status': 'success',
+                'status': 'success', # 성공적으로 처리되었음을 알리고
                 'data': {
-                    'id': result.id,
+                    'id': result.id, # 생성된 OMRResult 객체의 id를 반환
                     'exam_date': f"20{result_df['시행일'].iloc[0]}",
                     'class_code': result_df['반코드'].iloc[0],
                     'student_id': result_df['학번'].iloc[0],
                     'student_name': result_df['이름'].iloc[0],
-                    'answers': result_df.to_dict('records')
+                    'answers': result_df.to_dict('records') # result_df를 딕셔너리로 변환하여 반환
                 }
             })
 
@@ -65,26 +65,30 @@ def omr_process(request):
 def omr_result_list(request):
     results = OMRResult.objects.all().order_by('-exam_date', 'class_code', 'student_id')
     
-    exam_date = request.GET.get('exam_date')
+    # 사용자가 페이지에 그냥 접속만 했을 경우에는 request.GET ={}로 비어 있고, 아래 3개 변수는 None으로 설정됨
+    exam_date = request.GET.get('exam_date')  
     class_code = request.GET.get('class_code')
-    student_id = request.GET.get('student_id')
+    student_name = request.GET.get('student_name')
     
+    # 사용자가 검색 조건을 입력하고 검색 버튼을 눌렀을 경우에는 request.GET에 검색 조건이 담겨 있고, 아래 3개 변수는 검색 조건에 해당하는 값으로 설정됨
     if exam_date:
         results = results.filter(exam_date=exam_date)
     if class_code:
         results = results.filter(class_code=class_code)
-    if student_id:
-        results = results.filter(student_id=student_id)
+    if student_name:
+        results = results.filter(student_name__icontains=student_name)
     
     return render(request, 'omr_app/omr_result_list.html', {
-        'results': results,
-        'exam_dates': OMRResult.objects.dates('exam_date', 'day', order='DESC'),
-        'class_codes': OMRResult.objects.values_list('class_code', flat=True).distinct()
+        'results': results, # 전체 df를 테이블에 표시하기 위함
+        'exam_dates': OMRResult.objects.dates('exam_date', 'day', order='DESC'), 
+        'class_codes': OMRResult.objects.values_list('class_code', flat=True).distinct() # exam_dates와 class_code는 필터링 드롭다운 option 값으로 사용됨
     })
 
 def omr_result_detail(request, result_id):
     result = get_object_or_404(OMRResult, id=result_id)
     return render(request, 'omr_app/omr_result_detail.html', {'result': result})
+
+
 
 def student_list(request):
     students = Student.objects.all().order_by('school_type', 'grade', 'class_name', 'name')

@@ -7,7 +7,49 @@ from omr_app.omr_processors.recognize_marking import recognize_marking
 from omr_app.omr_processors.omr_data_processing import convert_marking_to_number, convert_marking_to_hangul, convert_pdf_to_image, create_student_dataframe
 
 def process_omr_image(image):
-    """OMR 이미지를 처리하여 DataFrame으로 결과를 반환하는 함수"""
+    """OMR 이미지를 처리하여 DataFrame으로 결과를 반환하는 함수
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        처리할 OMR 이미지 (BGR 형식의 OpenCV 이미지)
+
+    Returns
+    -------
+    pandas.DataFrame
+        다음과 같은 열을 포함하는 DataFrame:
+        - 시행일 (str): 시험 시행일 6자리 (예: '240315')
+        - 반코드 (str): 2자리 반 코드 (예: '01')
+        - 학번 (str): 8자리 학번
+        - 이름 (str): 학생 이름 (한글)
+        - 문항 (int): 문항 번호 (1부터 시작)
+        - 답 (str): 각 문항의 답안 (1-5 또는 'X')
+
+    Raises
+    ------
+    ValueError
+        필요한 영역을 찾을 수 없을 때 발생
+        (최소 5개의 contour가 필요함)
+
+    Notes
+    -----
+    - 시행일은 앞 6자리, 반코드는 뒤 2자리로 구성
+    - 답안이 마킹되지 않은 경우 'X'로 표시
+    - 각 문항별로 별도의 행으로 구성됨
+    - 반환되는 DataFrame은 문항 순서대로 정렬되어 있음
+
+    Examples
+    --------
+    >>> image = cv2.imread('omr_sample.jpg')
+    >>> df = process_omr_image(image)
+    >>> print(df.head())
+       시행일  반코드     학번   이름  문항  답
+    0  240315   01  20240001  홍길동    1   2
+    1  240315   01  20240001  홍길동    2   5
+    2  240315   01  20240001  홍길동    3   1
+    3  240315   01  20240001  홍길동    4   3
+    4  240315   01  20240001  홍길동    5   4
+    """
     
     # 이미지 전처리
     corrected_image = correct_skew(image)
@@ -88,7 +130,8 @@ def process_omr_image(image):
                             cell_size=(33.35,40),
                             roi_size=(22,15),
                             threshold=0.5,
-                            show_result=True)
+                            show_result=False)
+    
     
     ''' 이전 파라미터 기록 (삭제금지)
                             start_point=(24,2),
@@ -102,48 +145,42 @@ def process_omr_image(image):
     # 답안 영역 처리
     answer_params = [
         {
-            'start_point': (4.5,17.5),
-            'rows': 15, 'cols': 5,
-            'cell_size': (99.9, 60),
-            'first_row_height': 85.5,
-            'first_row_gap': 6.5,
-            'skip_params': (False, 0, 0),
-            'start_number': 1  # 1번부터 시작
+            'start_point': (4.5,8),
+            'rows': 20, 'cols': 5,
+            'cell_size': (66.6, 40),
+            'roi_size': (20,15),
+            'first_row_height': 55,
+            'first_row_gap': 5,
+            'skip_y_params': (True, 0, 45000),
+            'skip_x_params': (True, 50, 150000),
+            'start_number': 1,  # 1번부터 시작
+            'threshold': 0.5
         },
-        {
-            'start_point': (4.5,15),
-            'rows': 15, 'cols': 5,
-            'cell_size': (99.9, 60),
-            'first_row_height': 85.5,
-            'first_row_gap': 6.5,
-            'skip_params': (False, 0, 0),
-            'start_number': 16  # 16번부터 시작
-        }
     ]
 
-    # 답안 처리 결과를 하나의 문자열로 합치기
+    # 답안 처리 결과를 하나의 문자열로 합치기   
     all_answers = []
     question_numbers = []  # 문항 번호를 저장할 리스트
     
-    for i, params in enumerate(answer_params):
+    for i in range(2):
         area = get_omr_area_image(contours[i+3], gray_image, show_result=False)
-        marking_area = extract_marking_area(area, skip_x=params['skip_params'])
+        marking_area = extract_marking_area(area, skip_x=answer_params[0]['skip_x_params'], skip_y=answer_params[0]['skip_y_params'], show_result=False)
         marking_result = recognize_marking(marking_area,
-                                    start_point=params['start_point'],
-                                    rows=params['rows'],
-                                    cols=params['cols'],
-                                    cell_size=params['cell_size'],
-                                    first_row_height=params['first_row_height'],
-                                    first_row_gap=params['first_row_gap'],
-                                    roi_size=(33,18),
-                                    threshold=0.3,
-                                    show_result=False)
+                                    start_point=answer_params[0]['start_point'],
+                                    rows=answer_params[0]['rows'],
+                                    cols=answer_params[0]['cols'],
+                                    cell_size=answer_params[0]['cell_size'],
+                                    first_row_height=answer_params[0]['first_row_height'],
+                                    first_row_gap=answer_params[0]['first_row_gap'],
+                                    roi_size=answer_params[0]['roi_size'],
+                                    threshold=answer_params[0]['threshold'],
+                                    show_result=True)
         
         answers = convert_marking_to_number(marking_result)
         all_answers.extend(list(answers))
         
         # 해당 영역의 문항 번호 생성
-        start_num = params['start_number']
+        start_num = answer_params[0]['start_number']
         question_numbers.extend(range(start_num, start_num + len(answers)))
 
     # DataFrame 생성 및 반환
