@@ -9,6 +9,6 @@ class OMRResultAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('student_id', 'name', 'class_name', 'school_type', 'grade', 'school_name')
+    list_display = ('student_id', 'name', 'class_name', 'school_type', 'school_name', 'grade')
     list_filter = ('school_type', 'grade', 'class_name')
     search_fields = ('student_id', 'name', 'school_name')

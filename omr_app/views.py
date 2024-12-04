@@ -91,12 +91,25 @@ def omr_result_detail(request, result_id):
 
 
 def student_list(request):
-    students = Student.objects.all().order_by('school_type', 'grade', 'class_name', 'name')
+    students = Student.objects.all().order_by('class_name', 'school_type', 'grade', 'name')
     return render(request, 'omr_app/student_list.html', {
-        'students': students,
-        'grades': [1, 2, 3],
-        'class_names': Student.objects.values_list('class_name', flat=True).distinct()
+        'students': students, # 전체 df를 테이블에 표시하기 위함
+        'grades': [1, 2, 3], # 학년 드롭다운 option 값으로 사용됨
+        'class_names': Student.objects.values_list('class_name', flat=True).distinct() # 반 드롭다운 option 값으로 사용됨 
     })
+    
+''' class_names 설명
+values_list() 모델의 특정 속성 값들을 리스트로 반환함. 
+# flat=False 일 경우 (각요소가 튜플인 리스트 반환)
+    # 결과: [('A반',), ('A반',), ('B반',), ('C반',), ('B반',)]
+# flat=True 사용할 경우 (각 요소가 단일한 값으로 구성된 리스트 반환)
+    # 결과: ['A반', 'A반', 'B반', 'C반', 'B반']
+
+distinct() : unique()와 같은 기능 (중복된 값 제외)
+
+'''        
+
+    
 
 def student_detail(request, student_id):
     student = get_object_or_404(Student, student_id=student_id)
@@ -142,6 +155,7 @@ def student_add(request):
         print("에러 발생:", str(e))
         print("상세 에러:", traceback.format_exc())
         return JsonResponse({'status': 'error', 'message': str(e)})
+
 
 @require_POST
 def student_delete(request, student_id):

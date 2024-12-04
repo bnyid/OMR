@@ -20,8 +20,8 @@
           <th>이름</th>
           <th>소속반</th>
           <th>학교구분</th>
-          <th>학년</th>
           <th>학교명</th>
+          <th>학년</th>
           <th>등록일</th>
           <th>관리</th>
         </tr>
@@ -33,8 +33,8 @@
           <td>{{ student.name }}</td>
           <td>{{ student.class_name }}</td>
           <td>{{ student.get_school_type_display }}</td>
-          <td>{{ student.grade }}학년</td>
           <td>{{ student.school_name }}</td>
+          <td>{{ student.grade }}학년</td>
           <td>{{ student.registered_date|date:"Y-m-d" }}</td>
           <td>
             <a
@@ -61,15 +61,20 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
+        <!-- 모달 헤더 : 제목과 닫기 버튼 포함 -->
         <h5 class="modal-title">학생 추가</h5>
+        <!-- 우측 상단 X(닫기) 버튼 -->
         <button
           type="button"
           class="btn-close"
           data-bs-dismiss="modal"
         ></button>
       </div>
+      <!-- 정보 입력 폼 시작 -->
       <form id="addStudentForm">
+        <!-- 폼 내용을 담는 본문 영역-->
         <div class="modal-body">
+          <!-- 학번 입력 필드 : 최대 8자리 입력 가능 -->
           <div class="mb-3">
             <label class="form-label">학번</label>
             <input
@@ -80,6 +85,7 @@
               maxlength="8"
             />
           </div>
+          <!-- 이름 입력 필드 : 최대 10자리 입력 가능 -->
           <div class="mb-3">
             <label class="form-label">이름</label>
             <input
@@ -90,6 +96,7 @@
               maxlength="10"
             />
           </div>
+          <!-- 소속반 입력 필드 -->
           <div class="mb-3">
             <label class="form-label">소속반</label>
             <input
@@ -99,6 +106,7 @@
               required
             />
           </div>
+          <!-- 학교구분 선택 필드 -->
           <div class="mb-3">
             <label class="form-label">학교구분</label>
             <select class="form-select" name="school_type" required>
@@ -106,6 +114,7 @@
               <option value="H">고등학교</option>
             </select>
           </div>
+          <!-- 학년 선택 필드 -->
           <div class="mb-3">
             <label class="form-label">학년</label>
             <select class="form-select" name="grade" required>
@@ -114,6 +123,7 @@
               <option value="3">3학년</option>
             </select>
           </div>
+          <!-- 학교명 입력 필드 -->
           <div class="mb-3">
             <label class="form-label">학교명</label>
             <input
@@ -123,6 +133,7 @@
               required
             />
           </div>
+          <!-- 본인 연락처 입력 필드 -->
           <div class="mb-3">
             <label class="form-label">본인 연락처</label>
             <input
@@ -132,6 +143,7 @@
               required
             />
           </div>
+          <!-- 보호자 연락처 입력 필드 -->
           <div class="mb-3">
             <label class="form-label">보호자 연락처</label>
             <input
@@ -141,11 +153,13 @@
               required
             />
           </div>
+          <!-- 비고 입력 필드 -->
           <div class="mb-3">
             <label class="form-label">비고</label>
             <textarea class="form-control" name="note" rows="3"></textarea>
           </div>
         </div>
+        <!-- 폼 하단 버튼 영역 -->
         <div class="modal-footer">
           <button
             type="button"
@@ -174,24 +188,27 @@
 
     // 학생 추가
     $("#addStudentForm").on("submit", function (e) {
-      e.preventDefault();
+      // id가 addStudentForm인 폼에서 "submit" 이벤트 발생 시, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
+      e.preventDefault(); // 폼의 기본 제출 동작 방지
       console.log("Form submitted"); // 폼 제출 확인용 로그
 
-      const formData = new FormData(this);
-      const formObject = {};
+      const formData = new FormData(this); // FormData 객체에 현재 제출된 폼(this)의 모든 입력된 값들을 수집
+      const formObject = {}; // 빈 객체를 생성하여 FormData의 데이터를 일반 객체로 변환해서 담을 변수를 선언
       formData.forEach((value, key) => {
-        formObject[key] = value;
+        // FormData 객체의 각 키와 값을 순회하며
+        formObject[key] = value; // 키와 값을 formObject에 추가
       });
 
       console.log("Form data:", formObject); // 전송할 데이터 확인용 로그
 
+      // ajax = 비동기적(새로고침x)으로 서버와 통신할 때 사용하는 메소드
       $.ajax({
-        url: '{% url "omr_app:student_add" %}',
-        method: "POST",
-        data: formObject,
+        url: '{% url "omr_app:student_add" %}', // 전달할 서버 주소
+        method: "POST", // 요청 메소드
+        data: formObject, // 전송할 데이터
         headers: {
-          "X-CSRFToken": "{{ csrf_token }}",
-          "Content-Type": "application/x-www-form-urlencoded",
+          "X-CSRFToken": "{{ csrf_token }}", // CSRF 토큰 포함
+          "Content-Type": "application/x-www-form-urlencoded", // 폼 데이터 타입 지정
         },
         success: function (response) {
           console.log("Success:", response);
