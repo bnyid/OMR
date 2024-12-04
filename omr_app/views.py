@@ -1,14 +1,12 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import OMRResult, Student
-import json
-import cv2
-import numpy as np
+
 from .omr_processors.main import process_omr_image
 from .omr_processors.omr_data_processing import handle_image_file
-from django.db.models import Q
 from django.views.decorators.http import require_POST
+from django.contrib import messages
 
 def omr_upload(request):
     return render(request, 'omr_app/omr_upload.html')
@@ -91,13 +89,43 @@ def omr_result_detail(request, result_id):
 
 
 def student_list(request):
-    students = Student.objects.all().order_by('class_name', 'school_type', 'grade', 'name')
-    return render(request, 'omr_app/student_list.html', {
-        'students': students, # 전체 df를 테이블에 표시하기 위함
-        'grades': [1, 2, 3], # 학년 드롭다운 option 값으로 사용됨
-        'class_names': Student.objects.values_list('class_name', flat=True).distinct() # 반 드롭다운 option 값으로 사용됨 
-    })
-    
+    try:
+        # 기존 데이터 중 registered_date가 None이거나 잘못된 형식인 경우 처리
+        students_without_date = Student.objects.all()
+        print("전체 학생 수:", students_without_date.count())  # 디버깅용 출력
+        
+        for student in students_without_date:
+            try:
+                # registered_date 값이 유효한지 확인
+                if student.registered_date:
+                    str(student.registered_date)
+            except (ValueError, TypeError):
+                # 오류가 발생하면 None으로 설정
+                student.registered_date = None
+                student.save()
+                print(f"학생 {student.student_id}의 등록일 초기화됨")  # 디버깅용 출력
+        
+        # 전체 학생 목록을 등록일, 학번 순으로 정렬
+        students = Student.objects.all().order_by('registered_date', 'student_id')
+        print("정렬 후 학생 수:", students.count())  # 디버깅용 출력
+        
+        return render(request, 'omr_app/student_list.html', {
+            'students': students, # 전체 df를 테이블에 표시하기 위함
+            'grades': [1, 2, 3], # 학년 드롭다운 option 값으로 사용됨
+            'class_names': Student.objects.values_list('class_name', flat=True).distinct() # 반 드롭다운 option 값으로 사용됨 
+        })
+        
+    except Exception as e:
+        print(f"Error in student_list: {str(e)}")  # 디버깅용 출력
+        import traceback
+        print(traceback.format_exc())  # 상세 에러 메시지 출력
+        # 오류가 발생해도 빈 목록이라도 보여주기
+        return render(request, 'omr_app/student_list.html', {
+            'students': Student.objects.none(),
+            'grades': [1, 2, 3],
+            'class_names': []
+        })
+
 ''' class_names 설명
 values_list() 모델의 특정 속성 값들을 리스트로 반환함. 
 # flat=False 일 경우 (각요소가 튜플인 리스트 반환)
@@ -106,7 +134,6 @@ values_list() 모델의 특정 속성 값들을 리스트로 반환함.
     # 결과: ['A반', 'A반', 'B반', 'C반', 'B반']
 
 distinct() : unique()와 같은 기능 (중복된 값 제외)
-
 '''        
 
     
@@ -122,39 +149,64 @@ def student_detail(request, student_id):
 
 @require_POST
 def student_add(request):
-    try:
-        print("받은 데이터:", request.POST)
-        print("Content-Type:", request.headers.get('Content-Type'))
-        print("Method:", request.method)
-        
-        # POST 데이터 검증
-        required_fields = ['student_id', 'name', 'class_name', 'school_type', 'grade', 
-                         'school_name', 'phone_number', 'parent_phone']
-        
-        missing_fields = [field for field in required_fields if not request.POST.get(field)]
-        if missing_fields:
+    if request.method == 'POST':
+        try:
+            # 필수 필드인 이름만 먼저 확인
+            if not request.POST.get('name'):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': '이름은 필수 입력 항목입니다.'
+                })
+            
+            # 기본 데이터 구성 (이름만 필수)
+            student_data = {
+                'name': request.POST['name']
+            }
+            
+            # 선택적 필드들 처리
+            optional_fields = [
+                'student_id', 'class_name', 'school_type', 
+                'school_name', 'grade', 'phone_number', 
+                'parent_phone', 'note'
+            ]
+            
+            # 입력된 선택적 필드만 student_data에 추가
+            for field in optional_fields:
+                if request.POST.get(field):
+                    # grade는 정수형으로 변환 필요
+                    if field == 'grade':
+                        student_data[field] = int(request.POST[field])
+                    else:
+                        student_data[field] = request.POST[field]
+            
+            # 등록일이 입력된 경우 등록번호 생성
+            if request.POST.get('registered_date'):
+                reg_date = request.POST['registered_date']
+                # 해당 날짜의 등록 건수 확인
+                same_date_count = Student.objects.filter(
+                    registered_date__date=reg_date
+                ).count()
+                
+                # 등록번호 생성 (YYMMDD_XX 형식)
+                date_str = reg_date.replace('-', '')[2:]
+                registration_number = f"{date_str}_{str(same_date_count + 1).zfill(2)}"
+                
+                # 중복 확인 및 조정
+                while Student.objects.filter(registration_number=registration_number).exists():
+                    same_date_count += 1
+                    registration_number = f"{date_str}_{str(same_date_count + 1).zfill(2)}"
+                
+                student_data['registration_number'] = registration_number
+                student_data['registered_date'] = f"{reg_date} 00:00:00"
+            
+            student = Student.objects.create(**student_data)
+            return JsonResponse({'status': 'success'})
+            
+        except Exception as e:
             return JsonResponse({
                 'status': 'error',
-                'message': f'다음 필드가 누락되었습니다: {", ".join(missing_fields)}'
+                'message': str(e)
             })
-        
-        student = Student.objects.create(
-            student_id=request.POST['student_id'],
-            name=request.POST['name'],
-            class_name=request.POST['class_name'],
-            school_type=request.POST['school_type'],
-            grade=int(request.POST['grade']),
-            school_name=request.POST['school_name'],
-            phone_number=request.POST['phone_number'],
-            parent_phone=request.POST['parent_phone'],
-            note=request.POST.get('note', '')
-        )
-        return JsonResponse({'status': 'success'})
-    except Exception as e:
-        import traceback
-        print("에러 발생:", str(e))
-        print("상세 에러:", traceback.format_exc())
-        return JsonResponse({'status': 'error', 'message': str(e)})
 
 
 @require_POST
@@ -165,5 +217,98 @@ def student_delete(request, student_id):
         return JsonResponse({'status': 'success'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)})
+
+@require_POST
+def bulk_action(request):
+    selected_students = request.POST.getlist('selected_students')
+    action = request.POST.get('action')
+
+    if not selected_students:
+        messages.error(request, "선택된 학생이 없습니다.")
+        return redirect('omr_app:student_list')
+
+    if action == 'delete':
+        Student.objects.filter(id__in=selected_students).delete()
+        messages.success(request, "선택된 학생들이 삭제되었습니다.")
+    elif action == 'update':
+        new_class_name = request.POST.get('new_class_name')
+        new_school_name = request.POST.get('new_school_name')
+        new_grade = request.POST.get('new_grade')
+
+        update_fields = {}
+        if new_class_name:
+            update_fields['class_name'] = new_class_name
+        if new_school_name:
+            update_fields['school_name'] = new_school_name
+        if new_grade:
+            update_fields['grade'] = new_grade
+
+        if update_fields:
+            Student.objects.filter(id__in=selected_students).update(**update_fields)
+            messages.success(request, "선택된 학생들의 정보가 변경되었습니다.")
+        else:
+            messages.error(request, "변경할 정보를 입력하세요.")
+
+    return redirect('omr_app:student_list')
+
+@require_POST
+def student_update(request, student_id):
+    try:
+        student = get_object_or_404(Student, id=student_id)
+        
+        # 업데이트할 필드들을 수집
+        update_fields = {}
+        fields = ['student_id', 'name', 'class_name', 'school_name', 'grade', 'registered_date', 'phone_number', 'parent_phone', 'note']
+        
+        for field in fields:
+            value = request.POST.get(field)
+            # 빈 문자열이 전달된 경우도 처리
+            if value == '':
+                update_fields[field] = None
+            elif value:
+                update_fields[field] = value
+        
+        if update_fields:
+            # 등록일이 변경된 경우
+            if 'registered_date' in update_fields:
+                if update_fields['registered_date'] is None:
+                    # 등록일이 삭제된 경우 등록번호도 삭제
+                    update_fields['registration_number'] = None
+                else:
+                    # 새로운 등록일이 입력된 경우 등록번호 재생성
+                    reg_date = update_fields['registered_date']
+                    same_date_count = Student.objects.filter(
+                        registered_date__date=reg_date
+                    ).count()
+                    
+                    date_str = reg_date.replace('-', '')[2:]
+                    registration_number = f"{date_str}_{str(same_date_count + 1).zfill(2)}"
+                    
+                    while Student.objects.filter(registration_number=registration_number).exclude(id=student_id).exists():
+                        same_date_count += 1
+                        registration_number = f"{date_str}_{str(same_date_count + 1).zfill(2)}"
+                    
+                    update_fields['registration_number'] = registration_number
+
+            # 학생 정보 업데이트
+            for field, value in update_fields.items():
+                setattr(student, field, value)
+            student.save()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': '학생 정보가 성공적으로 수정되었습니다.'
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': '수정할 정보가 없습니다.'
+            })
+            
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        })
 
 # Create your views here.

@@ -28,16 +28,18 @@ class Student(models.Model):
         (3, '3학년'),
     ]
     
-    student_id = models.CharField('학번', max_length=8, primary_key=True)
-    registered_date = models.DateField('등록일', auto_now_add=True)
+    id = models.AutoField(primary_key=True)
+    student_id = models.CharField('학번', max_length=8, null=True, blank=True, unique=True)
+    registration_number = models.CharField('등록번호', max_length=11, null=True, blank=True)
+    registered_date = models.DateTimeField('등록일', null=True, blank=True)
     name = models.CharField('이름', max_length=10)
-    class_name = models.CharField('소속반', max_length=20)
-    school_type = models.CharField('중/고등 구분', max_length=1, choices=SCHOOL_TYPE_CHOICES)
-    school_name = models.CharField('학교명', max_length=30)
-    grade = models.IntegerField('학년', choices=GRADE_CHOICES)
-    phone_number = models.CharField('본인 연락처', max_length=11)
-    parent_phone = models.CharField('보호자 연락처', max_length=11)
-    note = models.TextField('비고', blank=True)
+    class_name = models.CharField('소속반', max_length=20, null=True, blank=True)
+    school_type = models.CharField('중/고등 구분', max_length=1, choices=SCHOOL_TYPE_CHOICES, null=True, blank=True)
+    school_name = models.CharField('학교명', max_length=30, null=True, blank=True)
+    grade = models.IntegerField('학년', choices=GRADE_CHOICES, null=True, blank=True)
+    phone_number = models.CharField('본인 연락처', max_length=11, null=True, blank=True)
+    parent_phone = models.CharField('보호자 연락처', max_length=11, null=True, blank=True)
+    note = models.TextField('비고', blank=True, null=True)
     
     class Meta:
         verbose_name = '학생'

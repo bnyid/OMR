@@ -8,8 +8,10 @@ urlpatterns = [
     path('students/add/', views.student_add, name='student_add'),
     path('students/<str:student_id>/', views.student_detail, name='student_detail'),
     path('students/<str:student_id>/delete/', views.student_delete, name='student_delete'),
+    path('students/<int:student_id>/update/', views.student_update, name='student_update'),
     path('omr/upload/', views.omr_upload, name='omr_upload'),
     path('omr/process/', views.omr_process, name='omr_process'),
     path('omr/results/', views.omr_result_list, name='omr_result_list'),
     path('omr/results/<int:result_id>/', views.omr_result_detail, name='omr_result_detail'),
+    path('bulk-action/', views.bulk_action, name='bulk_action'),
 ] 

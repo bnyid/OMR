@@ -1,58 +1,155 @@
 {% extends 'base.html' %} {% block content %}
+
+<style>
+  input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+    transform: scale(1.5);
+  }
+  .editable:hover {
+    background-color: #f8f9fa;
+    cursor: pointer;
+  }
+  .editing {
+    padding: 0 !important;
+  }
+  .editing input,
+  .editing select {
+    width: 100%;
+    height: 100%;
+    border: 1px solid #0d6efd;
+    padding: 0.375rem 0.75rem;
+  }
+  /* 테이블 가운데 정렬을 위한 스타일 추가 */
+  .table th,
+  .table td {
+    text-align: center;
+    vertical-align: middle;
+  }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h2>학생 목록</h2>
-  <button
-    type="button"
-    class="btn btn-primary"
-    data-bs-toggle="modal"
-    data-bs-target="#addStudentModal"
-  >
-    학생 추가
-  </button>
+  <div>
+    <button type="button" class="btn btn-warning me-2" value="update">
+      일괄 변경
+    </button>
+    <button
+      type="button"
+      class="btn btn-primary me-2"
+      data-bs-toggle="modal"
+      data-bs-target="#addStudentModal"
+    >
+      학생 추가
+    </button>
+    <button
+      type="submit"
+      name="action"
+      value="delete"
+      class="btn btn-danger"
+      form="bulkActionForm"
+    >
+      학생 삭제
+    </button>
+  </div>
 </div>
 
 <div class="card">
   <div class="card-body">
-    <table id="studentTable" class="table table-striped">
-      <thead>
-        <tr>
-          <th>학번</th>
-          <th>이름</th>
-          <th>소속반</th>
-          <th>학교구분</th>
-          <th>학교명</th>
-          <th>학년</th>
-          <th>등록일</th>
-          <th>관리</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for student in students %}
-        <tr>
-          <td>{{ student.student_id }}</td>
-          <td>{{ student.name }}</td>
-          <td>{{ student.class_name }}</td>
-          <td>{{ student.get_school_type_display }}</td>
-          <td>{{ student.school_name }}</td>
-          <td>{{ student.grade }}학년</td>
-          <td>{{ student.registered_date|date:"Y-m-d" }}</td>
-          <td>
-            <a
-              href="{% url 'omr_app:student_detail' student.student_id %}"
-              class="btn btn-sm btn-info"
-              >상세</a
-            >
-            <button
-              class="btn btn-sm btn-danger delete-student"
-              data-student-id="{{ student.student_id }}"
-            >
-              삭제
-            </button>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <form
+      id="bulkActionForm"
+      method="post"
+      action="{% url 'omr_app:bulk_action' %}"
+    >
+      {% csrf_token %}
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="selectAll" /></th>
+            <th>등록일</th>
+            <th>등록번호</th>
+            <th>학번</th>
+            <th>이름</th>
+            <th>소속반</th>
+            <th>학교명</th>
+            <th>학년</th>
+            <th>연락처</th>
+            <th>연락처_보호자</th>
+            <th>비고</th>
+            <th>작업</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for student in students %}
+          <tr data-student-id="{{ student.id }}">
+            <td>
+              <input
+                type="checkbox"
+                name="selected_students"
+                value="{{ student.id }}"
+              />
+            </td>
+            <td class="editable" data-field="registered_date">
+              {{ student.registered_date|date:"Y-m-d"|default:'-' }}
+            </td>
+            <td>{{ student.registration_number|default:'-' }}</td>
+            <td class="editable" data-field="student_id">
+              {{ student.student_id|default:'-' }}
+            </td>
+            <td class="editable" data-field="name">
+              {{ student.name|default:'-' }}
+            </td>
+            <td class="editable" data-field="class_name">
+              {{ student.class_name|default:'-' }}
+            </td>
+            <td class="editable" data-field="school_name">
+              {{ student.school_name|default:'-' }}
+            </td>
+            <td class="editable" data-field="grade">
+              {{ student.grade|default:'-' }}
+            </td>
+            <td class="editable" data-field="phone_number">
+              {{ student.phone_number|default:'-' }}
+            </td>
+            <td class="editable" data-field="parent_phone">
+              {{ student.parent_phone|default:'-' }}
+            </td>
+            <td class="editable" data-field="note">
+              {{ student.note|default:'-' }}
+            </td>
+            <td>
+              <a
+                href="{% url 'omr_app:student_detail' student.id %}"
+                class="btn btn-sm btn-info me-1"
+                >상세</a
+              >
+              <button
+                type="button"
+                class="btn btn-sm btn-warning me-1 edit-mode-btn"
+              >
+                수정
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-success save-row"
+                style="display: none"
+              >
+                저장
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-secondary cancel-edit"
+                style="display: none"
+              >
+                취소
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </form>
   </div>
 </div>
 
@@ -74,6 +171,11 @@
       <form id="addStudentForm">
         <!-- 폼 내용을 담는 본문 영역-->
         <div class="modal-body">
+          <!-- 등록일 입력 필드 -->
+          <div class="mb-3">
+            <label class="form-label">등록일</label>
+            <input type="date" class="form-control" name="registered_date" />
+          </div>
           <!-- 학번 입력 필드 : 최대 8자리 입력 가능 -->
           <div class="mb-3">
             <label class="form-label">학번</label>
@@ -81,7 +183,6 @@
               type="text"
               class="form-control"
               name="student_id"
-              required
               maxlength="8"
             />
           </div>
@@ -92,24 +193,18 @@
               type="text"
               class="form-control"
               name="name"
-              required
               maxlength="10"
             />
           </div>
           <!-- 소속반 입력 필드 -->
           <div class="mb-3">
             <label class="form-label">소속반</label>
-            <input
-              type="text"
-              class="form-control"
-              name="class_name"
-              required
-            />
+            <input type="text" class="form-control" name="class_name" />
           </div>
           <!-- 학교구분 선택 필드 -->
           <div class="mb-3">
             <label class="form-label">학교구분</label>
-            <select class="form-select" name="school_type" required>
+            <select class="form-select" name="school_type">
               <option value="M">중학교</option>
               <option value="H">고등학교</option>
             </select>
@@ -117,7 +212,7 @@
           <!-- 학년 선택 필드 -->
           <div class="mb-3">
             <label class="form-label">학년</label>
-            <select class="form-select" name="grade" required>
+            <select class="form-select" name="grade">
               <option value="1">1학년</option>
               <option value="2">2학년</option>
               <option value="3">3학년</option>
@@ -126,32 +221,17 @@
           <!-- 학교명 입력 필드 -->
           <div class="mb-3">
             <label class="form-label">학교명</label>
-            <input
-              type="text"
-              class="form-control"
-              name="school_name"
-              required
-            />
+            <input type="text" class="form-control" name="school_name" />
           </div>
           <!-- 본인 연락처 입력 필드 -->
           <div class="mb-3">
             <label class="form-label">본인 연락처</label>
-            <input
-              type="tel"
-              class="form-control"
-              name="phone_number"
-              required
-            />
+            <input type="tel" class="form-control" name="phone_number" />
           </div>
           <!-- 보호자 연락처 입력 필드 -->
           <div class="mb-3">
             <label class="form-label">보호자 연락처</label>
-            <input
-              type="tel"
-              class="form-control"
-              name="parent_phone"
-              required
-            />
+            <input type="tel" class="form-control" name="parent_phone" />
           </div>
           <!-- 비고 입력 필드 -->
           <div class="mb-3">
@@ -175,6 +255,56 @@
   </div>
 </div>
 
+<!-- 일괄 변경 모달 -->
+<div class="modal fade" id="bulkUpdateModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">일괄 정보 변경</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+      <form method="post" action="{% url 'omr_app:bulk_action' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update" />
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">소속반</label>
+            <input type="text" class="form-control" name="new_class_name" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">학교명</label>
+            <input type="text" class="form-control" name="new_school_name" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">학년</label>
+            <select class="form-select" name="new_grade">
+              <option value="">선택하세요</option>
+              <option value="1">1학년</option>
+              <option value="2">2학년</option>
+              <option value="3">3학년</option>
+            </select>
+          </div>
+          <div id="selectedStudentsContainer"></div>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-bs-dismiss="modal"
+          >
+            취소
+          </button>
+          <button type="submit" class="btn btn-primary">변경</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
   $(document).ready(function () {
     // DataTable 초기화
@@ -182,7 +312,7 @@
       language: {
         url: "//cdn.datatables.net/plug-ins/1.11.5/i18n/ko.json",
       },
-      order: [[1, "asc"]], // 이름 기준 오름차순 정렬
+      order: [[0, "desc"]], // 등록일 기준 내림차순 정렬
       pageLength: 25,
     });
 
@@ -211,11 +341,12 @@
           "Content-Type": "application/x-www-form-urlencoded", // 폼 데이터 타입 지정
         },
         success: function (response) {
-          console.log("Success:", response);
+          // 성공적으로 응답을 받았을 때 해당 JsonResponse 객체를 매개변수로 받아 실행되는 콜백 함수
+          console.log("Success:", response); // 응답 데이터 확인용 콘솔 로그
           if (response.status === "success") {
-            location.reload();
+            location.reload(); // 페이지 새로고침
           } else {
-            alert(response.message);
+            alert(response.message); // 응답 데이터에 따른 알림창 띄우기
           }
         },
         error: function (xhr, status, error) {
@@ -245,6 +376,150 @@
             }
           });
       }
+    });
+
+    // 전체 선택 체크박스 기능
+    $("#selectAll").change(function () {
+      $("input[name='selected_students']").prop(
+        "checked",
+        $(this).prop("checked")
+      );
+    });
+
+    // 일괄 변경 버튼 클릭 시
+    $("button[value='update']").click(function (e) {
+      e.preventDefault();
+
+      // 선택된 학생들의 ID 수집
+      const selectedStudents = [];
+      $("input[name='selected_students']:checked").each(function () {
+        selectedStudents.push($(this).val());
+      });
+
+      if (selectedStudents.length === 0) {
+        alert("변경할 학생을 선택해주세요.");
+        return;
+      }
+
+      // 선택된 학생들의 ID를 hidden input으로 추가
+      $("#selectedStudentsContainer").empty();
+      selectedStudents.forEach(function (studentId) {
+        $("#selectedStudentsContainer").append(
+          `<input type="hidden" name="selected_students" value="${studentId}">`
+        );
+      });
+
+      // 모달 표시
+      $("#bulkUpdateModal").modal("show");
+    });
+
+    // 수정 버튼 클릭 시
+    $(".edit-mode-btn").click(function () {
+      const row = $(this).closest("tr");
+
+      // 수정/상세 버튼 숨기고 저장/취소 버튼 표시
+      row.find(".edit-mode-btn, .btn-info").hide();
+      row.find(".save-row, .cancel-edit").show();
+
+      // 각 셀을 입력 필드로 변환하기 전에 원본 데이터 저장
+      row.find(".editable").each(function () {
+        const field = $(this).data("field");
+        const originalValue = $(this).text().trim();
+        row.data(`original-${field}`, originalValue);
+      });
+
+      // 각 셀을 입력 필드로 변환
+      row.find(".editable").each(function () {
+        const value = $(this).text().trim();
+        const field = $(this).data("field");
+
+        if (field === "grade") {
+          $(this).html(`
+            <select class="form-control form-control-sm">
+              <option value="1" ${value === "1" ? "selected" : ""}>1</option>
+              <option value="2" ${value === "2" ? "selected" : ""}>2</option>
+              <option value="3" ${value === "3" ? "selected" : ""}>3</option>
+            </select>
+          `);
+        } else if (field === "registered_date") {
+          $(this).html(`
+            <input type="date" class="form-control form-control-sm" value="${value}">
+          `);
+        } else {
+          $(this).html(
+            `<input type="text" class="form-control form-control-sm" value="${value}">`
+          );
+        }
+
+        // Enter 키와 ESC 키 이벤트 핸들러 추가
+        $(this)
+          .find("input, select")
+          .on("keydown", function (e) {
+            if (e.which === 13) {
+              // Enter 키
+              e.preventDefault();
+              $(this).closest("tr").find(".save-row").click();
+            } else if (e.which === 27) {
+              // ESC 키
+              e.preventDefault();
+              $(this).closest("tr").find(".cancel-edit").click();
+              return false; // 이벤트 전파 중단
+            }
+          });
+      });
+    });
+
+    // 취소 버튼 클릭 시
+    $(".cancel-edit").click(function () {
+      const row = $(this).closest("tr");
+
+      // 각 셀의 원래 데이터로 복원
+      row.find(".editable").each(function () {
+        const field = $(this).data("field");
+        let originalValue = row.data(`original-${field}`);
+
+        // 값이 없는 경우 '-' 표시
+        if (!originalValue || originalValue === "None") {
+          originalValue = "-";
+        }
+        $(this).html(originalValue);
+      });
+
+      // 버튼 상태 복원
+      row.find(".edit-mode-btn, .btn-info").show();
+      row.find(".save-row, .cancel-edit").hide();
+    });
+
+    // 저장 버튼 클릭 시 (기존 코드와 동일)
+    $(".save-row").click(function () {
+      const row = $(this).closest("tr");
+      const studentId = row.data("student-id");
+      const updates = {};
+
+      row.find(".editable").each(function () {
+        const field = $(this).data("field");
+        const value = $(this).find("input, select").val();
+        updates[field] = value;
+      });
+
+      $.ajax({
+        url: `/students/${studentId}/update/`,
+        method: "POST",
+        data: updates,
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+        },
+        success: function (response) {
+          if (response.status === "success") {
+            location.reload();
+          } else {
+            alert(response.message);
+          }
+        },
+        error: function () {
+          alert("저장 중 오류가 발생했습니다.");
+        },
+      });
     });
   });
 </script>
