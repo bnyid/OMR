@@ -106,7 +106,7 @@ def student_list(request):
                 print(f"학생 {student.student_id}의 등록일 초기화됨")  # 디버깅용 출력
         
         # 전체 학생 목록을 등록일, 학번 순으로 정렬
-        students = Student.objects.all().order_by('registered_date', 'student_id')
+        students = Student.objects.all().order_by('registration_number')
         print("정렬 후 학생 수:", students.count())  # 디버깅용 출력
         
         return render(request, 'omr_app/student_list.html', {
@@ -138,9 +138,9 @@ distinct() : unique()와 같은 기능 (중복된 값 제외)
 
     
 
-def student_detail(request, student_id):
-    student = get_object_or_404(Student, student_id=student_id)
-    omr_results = OMRResult.objects.filter(student_id=student_id).order_by('-exam_date')
+def student_detail(request, student_code):
+    student = get_object_or_404(Student, student_code=student_code)
+    omr_results = OMRResult.objects.filter(student_code=student_code).order_by('-exam_date')
     
     return render(request, 'omr_app/student_detail.html', {
         'student': student,
@@ -252,30 +252,49 @@ def bulk_action(request):
     return redirect('omr_app:student_list')
 
 @require_POST
-def student_update(request, student_id):
+def student_update(request, student_id): # url상의 <student_id> 변수를 받아오는 것임
     try:
+        print("\n try문 진입")
         student = get_object_or_404(Student, id=student_id)
         
         # 업데이트할 필드들을 수집
         update_fields = {}
-        fields = ['student_id', 'name', 'class_name', 'school_name', 'grade', 'registered_date', 'phone_number', 'parent_phone', 'note']
+        fields = ['student_code', 'name', 'class_name', 'school_name', 'grade', 
+                 'registered_date', 'phone_number', 'parent_phone', 'note']
+        
+        print("\n=== 학생 정보 업데이트 디버깅 ===")
+        print(f"학생 ID: {student_id}")
         
         for field in fields:
             value = request.POST.get(field)
-            # 빈 문자열이 전달된 경우도 처리
-            if value == '':
-                update_fields[field] = None
-            elif value:
-                update_fields[field] = value
+            current_value = getattr(student, field)
+            
+            # 날짜 필드의 경우 문자열 형식 통일
+            if field == 'registered_date' and current_value:
+                current_value = current_value.strftime('%Y-%m-%d')
+            
+            print(f"\n필드명: {field}")
+            print(f"- POST로 전달된 값: '{value}'")
+            print(f"- 현재 DB 값: '{current_value}'")
+            print(f"- 값이 다른가?: {value != current_value}")
+            
+            # 현재 값과 다른 경우에만 업데이트 필드에 추가
+            if value != current_value:
+                if value == '':
+                    update_fields[field] = None
+                else:
+                    update_fields[field] = value
+        
+        print("\n최종 업데이트될 필드들:")
+        print(update_fields)
+        print("================================\n")
         
         if update_fields:
-            # 등록일이 변경된 경우
+            # registered_date가 실제로 변경된 경우에만 등록번호 처리
             if 'registered_date' in update_fields:
                 if update_fields['registered_date'] is None:
-                    # 등록일이 삭제된 경우 등록번호도 삭제
                     update_fields['registration_number'] = None
                 else:
-                    # 새로운 등록일이 입력된 경우 등록번호 재생성
                     reg_date = update_fields['registered_date']
                     same_date_count = Student.objects.filter(
                         registered_date__date=reg_date
@@ -284,7 +303,9 @@ def student_update(request, student_id):
                     date_str = reg_date.replace('-', '')[2:]
                     registration_number = f"{date_str}_{str(same_date_count + 1).zfill(2)}"
                     
-                    while Student.objects.filter(registration_number=registration_number).exclude(id=student_id).exists():
+                    while Student.objects.filter(
+                        registration_number=registration_number
+                    ).exclude(id=student_id).exists():
                         same_date_count += 1
                         registration_number = f"{date_str}_{str(same_date_count + 1).zfill(2)}"
                     
