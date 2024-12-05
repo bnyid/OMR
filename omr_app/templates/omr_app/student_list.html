@@ -414,7 +414,6 @@
           success: function (response) {
             console.log("서버 응답:", response);
             if (response.status === "success") {
-              alert(response.message);
               window.location.reload();
             } else {
               alert(response.message || "삭제 중 오류가 발생했습니다.");

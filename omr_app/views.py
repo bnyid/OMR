@@ -237,7 +237,6 @@ def bulk_action(request):
             Student.objects.filter(id__in=selected_students).delete()
             return JsonResponse({
                 'status': 'success',
-                'message': "선택된 학생들이 삭제되었습니다."
             })
         elif action == 'update':
             new_class_name = request.POST.get('new_class_name')
@@ -256,7 +255,6 @@ def bulk_action(request):
                 Student.objects.filter(id__in=selected_students).update(**update_fields)
                 return JsonResponse({
                     'status': 'success',
-                    'message': "선택된 학생들의 정보가 변경되었습니다."
                 })
             else:
                 return JsonResponse({
