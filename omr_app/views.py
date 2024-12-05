@@ -7,6 +7,8 @@ from .omr_processors.main import process_omr_image
 from .omr_processors.omr_data_processing import handle_image_file
 from django.views.decorators.http import require_POST
 from django.contrib import messages
+from django.db.models import F, Value, DateField
+from django.db.models.functions import Coalesce
 
 def omr_upload(request):
     return render(request, 'omr_app/omr_upload.html')
@@ -33,7 +35,7 @@ def omr_process(request):
                 student_id=result_df['학번'].iloc[0],
                 student_name=result_df['이름'].iloc[0],
                 answer_sheet=image_file,
-                answers=result_df.to_dict('records') # 전체 result_df를 딕셔너리로 변환하여 저장(시행일부터 답안까지) 
+                answers=result_df.to_dict('records') # 전체 result_df를 딕셔너���로 변환하여 저장(시행일부터 답안까지) 
             )
 
             return JsonResponse({
@@ -91,10 +93,10 @@ def omr_result_detail(request, result_id):
 def student_list(request):
     try:
         # 기존 데이터 중 registered_date가 None이거나 잘못된 형식인 경우 처리
-        students_without_date = Student.objects.all()
-        print("전체 학생 수:", students_without_date.count())  # 디버깅용 출력
+        students_all = Student.objects.all()
+        print("전체 학생 수:", students_all.count())  # 디버깅용 출력
         
-        for student in students_without_date:
+        for student in students_all:
             try:
                 # registered_date 값이 유효한지 확인
                 if student.registered_date:
@@ -106,7 +108,12 @@ def student_list(request):
                 print(f"학생 {student.student_id}의 등록일 초기화됨")  # 디버깅용 출력
         
         # 전체 학생 목록을 등록일, 학번 순으로 정렬
-        students = Student.objects.all().order_by('registration_number')
+        students = Student.objects.annotate( # annotate는 기존 모델에 없는 새로운 필드를 임시로 추가함.
+            sort_date=Coalesce( # Coalesce는 첫번째 인자가 None이면 두번째 인자를 반환함.
+                'registered_date',
+                Value('9999-12-31', output_field=DateField()) #9999-12-31은 문자열 이므로 date타입으로 바꿔서 두번째 인자로 전달함
+            )
+        ).order_by('sort_date', 'registration_number', 'id')
         print("정렬 후 학생 수:", students.count())  # 디버깅용 출력
         
         return render(request, 'omr_app/student_list.html', {
