@@ -56,6 +56,19 @@
     font-size: 0.875rem;
     line-height: 1.2;
   }
+  .new-student-row input[type="text"],
+  .new-student-row input[type="date"],
+  .new-student-row input[type="tel"],
+  .new-student-row select {
+    width: 100%;
+    min-width: 80px;
+    height: 31px !important;
+    border: 1px solid #0d6efd;
+    padding: 0.25rem 0.5rem !important;
+    text-align: center !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -64,12 +77,7 @@
     <button type="button" class="btn btn-warning me-2" value="update">
       일괄 변경
     </button>
-    <button
-      type="button"
-      class="btn btn-primary me-2"
-      data-bs-toggle="modal"
-      data-bs-target="#addStudentModal"
-    >
+    <button type="button" class="btn btn-primary me-2" id="addRowBtn">
       학생 추가
     </button>
     <button
@@ -182,158 +190,6 @@
   </div>
 </div>
 
-<!-- 학생 추가 모달 -->
-<div class="modal fade" id="addStudentModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <!-- 모달 헤더 : 제목과 닫기 버튼 포함 -->
-        <h5 class="modal-title">학생 추가</h5>
-        <!-- 우측 상단 X(닫기) 버튼 -->
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="modal"
-        ></button>
-      </div>
-      <!-- 정보 입력 폼 시작 -->
-      <form id="addStudentForm">
-        <!-- 폼 내용을 담는 본문 영역-->
-        <div class="modal-body">
-          <!-- 등록일 입력 필드 -->
-          <div class="mb-3">
-            <label class="form-label">등록일</label>
-            <input type="date" class="form-control" name="registered_date" />
-          </div>
-          <!-- 학번 입력 필드 : 최대 8자리 입력 가능 -->
-          <div class="mb-3">
-            <label class="form-label">학번</label>
-            <input
-              type="text"
-              class="form-control"
-              name="student_code"
-              maxlength="8"
-            />
-          </div>
-          <!-- 이름 입력 필드 : 최대 10자리 입력 가능 -->
-          <div class="mb-3">
-            <label class="form-label">이름</label>
-            <input
-              type="text"
-              class="form-control"
-              name="name"
-              maxlength="10"
-            />
-          </div>
-          <!-- 소속반 입력 필드 -->
-          <div class="mb-3">
-            <label class="form-label">소속반</label>
-            <input type="text" class="form-control" name="class_name" />
-          </div>
-          <!-- 학교구분 선택 필드 -->
-          <div class="mb-3">
-            <label class="form-label">학교구분</label>
-            <select class="form-select" name="school_type">
-              <option value="M">중학교</option>
-              <option value="H">고등학교</option>
-            </select>
-          </div>
-          <!-- 학년 선택 필드 -->
-          <div class="mb-3">
-            <label class="form-label">학년</label>
-            <select class="form-select" name="grade">
-              <option value="1">1학년</option>
-              <option value="2">2학년</option>
-              <option value="3">3학년</option>
-            </select>
-          </div>
-          <!-- 학교명 입력 필드 -->
-          <div class="mb-3">
-            <label class="form-label">학교명</label>
-            <input type="text" class="form-control" name="school_name" />
-          </div>
-          <!-- 본인 연락처 입력 필드 -->
-          <div class="mb-3">
-            <label class="form-label">본인 연락처</label>
-            <input type="tel" class="form-control" name="phone_number" />
-          </div>
-          <!-- 보호자 연락처 입력 필드 -->
-          <div class="mb-3">
-            <label class="form-label">보호자 연락처</label>
-            <input type="tel" class="form-control" name="parent_phone" />
-          </div>
-          <!-- 비고 입력 필드 -->
-          <div class="mb-3">
-            <label class="form-label">비고</label>
-            <textarea class="form-control" name="note" rows="3"></textarea>
-          </div>
-        </div>
-        <!-- 폼 하단 버튼 영역 -->
-        <div class="modal-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            data-bs-dismiss="modal"
-          >
-            취소
-          </button>
-          <button type="submit" class="btn btn-primary">저장</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<!-- 일괄 변경 모달 -->
-<div class="modal fade" id="bulkUpdateModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">일괄 정보 변경</h5>
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="modal"
-        ></button>
-      </div>
-      <form method="post" action="{% url 'omr_app:bulk_action' %}">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="update" />
-        <div class="modal-body">
-          <div class="mb-3">
-            <label class="form-label">소속반</label>
-            <input type="text" class="form-control" name="new_class_name" />
-          </div>
-          <div class="mb-3">
-            <label class="form-label">학교명</label>
-            <input type="text" class="form-control" name="new_school_name" />
-          </div>
-          <div class="mb-3">
-            <label class="form-label">학년</label>
-            <select class="form-select" name="new_grade">
-              <option value="">선택하세요</option>
-              <option value="1">1학년</option>
-              <option value="2">2학년</option>
-              <option value="3">3학년</option>
-            </select>
-          </div>
-          <div id="selectedStudentsContainer"></div>
-        </div>
-        <div class="modal-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            data-bs-dismiss="modal"
-          >
-            취소
-          </button>
-          <button type="submit" class="btn btn-primary">변경</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
 <script>
   $(document).ready(function () {
     // DataTable 초기화
@@ -345,37 +201,78 @@
       pageLength: 25,
     });
 
-    // 학생 추가
-    $("#addStudentForm").on("submit", function (e) {
-      // id가 addStudentForm인 폼에서 "submit" 이벤트 발생 시, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
-      e.preventDefault(); // 폼의 기본 제출 동작 방지
-      console.log("Form submitted"); // 폼 제출 확인용 로그
+    // 학생 추가 버튼 클릭 시
+    $("#addRowBtn").click(function () {
+      // id가 addRowBtn인 요소를 클릭했을 때, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
+      const newRow = `
+            <tr class="new-student-row">
+                <td><input type="checkbox" name="selected_students" disabled></td>
+                <td><input type="date" class="form-control form-control-sm" name="registered_date"></td>
+                <td></td>
+                <td><input type="text" class="form-control form-control-sm" name="student_code" maxlength="8"></td>
+                <td><input type="text" class="form-control form-control-sm" name="name" maxlength="10" required></td>
+                <td><input type="text" class="form-control form-control-sm" name="class_name"></td>
+                <td><input type="text" class="form-control form-control-sm" name="school_name"></td>
+                <td>
+                    <select class="form-control form-control-sm" name="grade">
+                        <option value=""></option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                    </select>
+                </td>
+                <td><input type="tel" class="form-control form-control-sm" name="phone_number"></td>
+                <td><input type="tel" class="form-control form-control-sm" name="parent_phone"></td>
+                <td><input type="text" class="form-control form-control-sm" name="note"></td>
+                <td class="button-container">
+                    <button type="button" class="btn btn-sm btn-success me-1 save-new-row">저장</button>
+                    <button type="button" class="btn btn-sm btn-secondary cancel-new-row">취소</button>
+                </td>
+            </tr>
+        `;
+      $("table tbody").append(newRow);
 
-      const formData = new FormData(this); // FormData 객체에 현재 제출된 폼(this)의 모든 입력된 값들을 수집
-      const formObject = {}; // 빈 객체를 생성하여 FormData의 데이터를 일반 ��체로 변환해서 담을 변수를 선언
-      formData.forEach((value, key) => {
-        // FormData 객체의 각 키와 값을 순회하며
-        formObject[key] = value; // 키와 값을 formObject에 추가
+      // 새로 추가된 행의 모든 input과 select 요소에 대해 Enter 키 이벤트 핸들러 추가
+      $(".new-student-row") // 클래스가 new-student-row인 요소를 찾아서
+        .find("input, select") // 그 요소 내부에서 input과 select 요소를 찾아서
+        .on("keydown", function (e) {
+          // 그 요소에서 키가 눌렸을때(=keydown이벤트), 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
+          if (e.which === 13) {
+            // 눌러진 키의 코드(which)가 enter키(13)와 같으면
+            e.preventDefault(); // 기본 동작 방지
+            $(this).closest("tr").find(".save-new-row").click(); // 가장 가까운 <tr> 태그 내부에서 save-new-row클래스 요소를 찾아서 클릭
+          }
+        });
+    });
+
+    // 새 행 취소 버튼 클릭 시
+    $(document).on("click", ".cancel-new-row", function () {
+      // cancel-new-row 클래스 요소를 클릭하면, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
+      $(this).closest("tr").remove(); // 클릭한 요소(this)의 가장 가까운 부모 요소인 <tr>태그를 찾아서 삭제
+    });
+
+    // 새 행 저장 버튼 클릭 시
+    $(document).on("click", ".save-new-row", function () {
+      // save-new-row 클래스 요소를 클릭하면, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
+      const row = $(this).closest("tr"); // 클릭한 요소(this)의 가장 가까운 부모 요소인 <tr>태그를 찾아서 row 변수에 저장
+      const formData = {}; // 빈 객체를 생성하여 그릇으로 사용
+
+      row.find("input, select").each(function () {
+        formData[$(this).attr("name")] = $(this).val(); // 각 요소의 name속성과 value 속성을 찾아서 formData 객체에 키:값 형태로 추가
       });
 
-      console.log("Form data:", formObject); // 전송할 데이터 확인용 로그
-
-      // ajax = 비동기적(새로고침x)으로 서버와 통신할 때 사용하는 메소드
       $.ajax({
-        url: '{% url "omr_app:student_add" %}', // 전달할 서버 주소
-        method: "POST", // 요청 메소드
-        data: formObject, // 전송할 데이터
+        url: '{% url "omr_app:student_add" %}',
+        method: "POST",
+        data: formData,
         headers: {
-          "X-CSRFToken": "{{ csrf_token }}", // CSRF 토큰 포함
-          "Content-Type": "application/x-www-form-urlencoded", // 폼 데이터 타입 지정
+          "X-CSRFToken": "{{ csrf_token }}",
         },
         success: function (response) {
-          // 성공적으로 응답을 받았을 때 해당 JsonResponse 객체를 매개변수로 받아 실행되는 콜백 함수
-          console.log("Success:", response); // 응답 데이터 확인용 콘솔 로그
           if (response.status === "success") {
-            location.reload(); // 페이지 새로고침
+            location.reload();
           } else {
-            alert(response.message); // 응답 데이터에 따른 알림창 띄우기
+            alert(response.message);
           }
         },
         error: function (xhr, status, error) {
