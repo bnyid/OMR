@@ -7,7 +7,7 @@ from .omr_processors.main import process_omr_image
 from .omr_processors.omr_data_processing import handle_image_file
 from django.views.decorators.http import require_POST
 from django.contrib import messages
-from django.db.models import F, Value
+from django.db.models import F, Value, DateField
 from django.db.models.functions import Coalesce
 
 def omr_upload(request):
