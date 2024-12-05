@@ -31,7 +31,7 @@ class Student(models.Model):
     id = models.AutoField(primary_key=True)
     student_code = models.CharField('학번', max_length=8, null=True, blank=True, unique=True)
     registration_number = models.CharField('등록번호', max_length=11, null=True, blank=True)
-    registered_date = models.DateTimeField('등록일', null=True, blank=True)
+    registered_date = models.DateField(null=True, blank=True)
     name = models.CharField('이름', max_length=10)
     class_name = models.CharField('소속반', max_length=20, null=True, blank=True)
     school_type = models.CharField('중/고등 구분', max_length=1, choices=SCHOOL_TYPE_CHOICES, null=True, blank=True)

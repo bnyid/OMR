@@ -335,215 +335,242 @@
 </div>
 
 <script>
-      $(document).ready(function () {
-        // DataTable 초기화
-        $("#studentTable").DataTable({
-          language: {
-            url: "//cdn.datatables.net/plug-ins/1.11.5/i18n/ko.json",
+  $(document).ready(function () {
+    // DataTable 초기화
+    $("#studentTable").DataTable({
+      language: {
+        url: "//cdn.datatables.net/plug-ins/1.11.5/i18n/ko.json",
+      },
+      order: [[0, "desc"]], // 등록일 기준 내림차순 정렬
+      pageLength: 25,
+    });
+
+    // 학생 추가
+    $("#addStudentForm").on("submit", function (e) {
+      // id가 addStudentForm인 폼에서 "submit" 이벤트 발생 시, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
+      e.preventDefault(); // 폼의 기본 제출 동작 방지
+      console.log("Form submitted"); // 폼 제출 확인용 로그
+
+      const formData = new FormData(this); // FormData 객체에 현재 제출된 폼(this)의 모든 입력된 값들을 수집
+      const formObject = {}; // 빈 객체를 생성하여 FormData의 데이터를 일반 ��체로 변환해서 담을 변수를 선언
+      formData.forEach((value, key) => {
+        // FormData 객체의 각 키와 값을 순회하며
+        formObject[key] = value; // 키와 값을 formObject에 추가
+      });
+
+      console.log("Form data:", formObject); // 전송할 데이터 확인용 로그
+
+      // ajax = 비동기적(새로고침x)으로 서버와 통신할 때 사용하는 메소드
+      $.ajax({
+        url: '{% url "omr_app:student_add" %}', // 전달할 서버 주소
+        method: "POST", // 요청 메소드
+        data: formObject, // 전송할 데이터
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}", // CSRF 토큰 포함
+          "Content-Type": "application/x-www-form-urlencoded", // 폼 데이터 타입 지정
+        },
+        success: function (response) {
+          // 성공적으로 응답을 받았을 때 해당 JsonResponse 객체를 매개변수로 받아 실행되는 콜백 함수
+          console.log("Success:", response); // 응답 데이터 확인용 콘솔 로그
+          if (response.status === "success") {
+            location.reload(); // 페이지 새로고침
+          } else {
+            alert(response.message); // 응답 데이터에 따른 알림창 띄우기
+          }
+        },
+        error: function (xhr, status, error) {
+          console.error("Error:", xhr.responseText);
+          alert("학생 추가 중 오류가 발생했습니다.");
+        },
+      });
+    });
+
+    // 삭제 버튼 클릭 시 (value="delete"인 버튼)
+    $('button[value="delete"]').click(function (e) {
+      e.preventDefault();
+
+      const selectedStudents = $('input[name="selected_students"]:checked');
+
+      if (selectedStudents.length === 0) {
+        alert("선택된 학생이 없습니다.");
+        return;
+      }
+
+      if (confirm("선택한 학생들을 삭제하시겠습니까?")) {
+        const form = $("#bulkActionForm")[0];
+        const formData = new FormData(form);
+        const deleteButton = $('button[value="delete"]');
+        formData.append("action", deleteButton.val());
+
+        $.ajax({
+          url: "{% url 'omr_app:bulk_action' %}", // URL 수정
+          method: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          headers: {
+            "X-CSRFToken": "{{ csrf_token }}",
           },
-          order: [[0, "desc"]], // 등록일 기준 내림차순 정렬
-          pageLength: 25,
+          success: function (response) {
+            console.log("서버 응답:", response);
+            if (response.status === "success") {
+              alert(response.message);
+              window.location.reload();
+            } else {
+              alert(response.message || "삭제 중 오류가 발생했습니다.");
+            }
+          },
+          error: function (xhr, status, error) {
+            console.error("Error:", xhr.responseText);
+            alert("서버 오류가 발생했습니다. 다시 시도해주세요.");
+          },
         });
+      }
+    });
 
-        // 학생 추가
-        $("#addStudentForm").on("submit", function (e) {
-          // id가 addStudentForm인 폼에서 "submit" 이벤트 발생 시, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
-          e.preventDefault(); // 폼의 기본 제출 동작 방지
-          console.log("Form submitted"); // 폼 제출 확인용 로그
+    // 전체 선택 체크박스 기능
+    $("#selectAll").change(function () {
+      $("input[name='selected_students']").prop(
+        "checked",
+        $(this).prop("checked")
+      );
+    });
 
-          const formData = new FormData(this); // FormData 객체에 현재 제출된 폼(this)의 모든 입력된 값들을 수집
-          const formObject = {}; // 빈 객체를 생성하여 FormData의 데이터를 일반 객체로 변환해서 담을 변수를 선언
-          formData.forEach((value, key) => {
-            // FormData 객체의 각 키와 값을 순회하며
-            formObject[key] = value; // 키와 값을 formObject에 추가
-          });
+    // 일괄 변경 버튼 클릭 시
+    $("button[value='update']").click(function (e) {
+      e.preventDefault();
 
-          console.log("Form data:", formObject); // 전송할 데이터 확인용 로그
+      // 선택된 학생들의 ID 수집
+      const selectedStudents = [];
+      $("input[name='selected_students']:checked").each(function () {
+        selectedStudents.push($(this).val());
+      });
 
-          // ajax = 비동기적(새로고침x)으로 서버와 통신할 때 사용하는 메소드
-          $.ajax({
-            url: '{% url "omr_app:student_add" %}', // 전달할 서버 주소
-            method: "POST", // 요청 메소드
-            data: formObject, // 전송할 데이터
-            headers: {
-              "X-CSRFToken": "{{ csrf_token }}", // CSRF 토큰 포함
-              "Content-Type": "application/x-www-form-urlencoded", // 폼 데이터 타입 지정
-            },
-            success: function (response) {
-              // 성공적으로 응답을 받았을 때 해당 JsonResponse 객체를 매개변수로 받아 실행되는 콜백 함수
-              console.log("Success:", response); // 응답 데이터 확인용 콘솔 로그
-              if (response.status === "success") {
-                location.reload(); // 페이지 새로고침
-              } else {
-                alert(response.message); // 응답 데이터에 따른 알림창 띄우기
-              }
-            },
-            error: function (xhr, status, error) {
-              console.error("Error:", xhr.responseText);
-              alert("학생 추가 중 오류가 발생했습니다.");
-            },
-          });
-        });
+      if (selectedStudents.length === 0) {
+        alert("변경할 학생을 선택해주세요.");
+        return;
+      }
 
-        // 학생 삭제
-        $(".delete-student").on("click", function () {
-          if (confirm("정말 삭제하시겠습니까?")) {
-            const studentId = $(this).data("student-id");
+      // 선택된 학생들의 ID를 hidden input으로 추가
+      $("#selectedStudentsContainer").empty();
+      selectedStudents.forEach(function (studentId) {
+        $("#selectedStudentsContainer").append(
+          `<input type="hidden" name="selected_students" value="${studentId}">`
+        );
+      });
 
-            fetch(`/students/${studentId}/delete/`, {
-              method: "POST",
-              headers: {
-                "X-CSRFToken": "{{ csrf_token }}",
-              },
-            })
-              .then((response) => response.json())
-              .then((data) => {
-                if (data.status === "success") {
-                  location.reload();
-                } else {
-                  alert(data.message);
-                }
-              });
-          }
-        });
+      // 모달 표시
+      $("#bulkUpdateModal").modal("show");
+    });
 
-        // 전체 선택 체크박스 기능
-        $("#selectAll").change(function () {
-          $("input[name='selected_students']").prop(
-            "checked",
-            $(this).prop("checked")
-          );
-        });
+    // 수정 버튼 클릭 시
+    $(".edit-mode-btn").click(function () {
+      const row = $(this).closest("tr");
 
-        // 일괄 변경 버튼 클릭 시
-        $("button[value='update']").click(function (e) {
-          e.preventDefault();
+      // 수정/상세 버튼 숨기고 저장/취소 버튼 표시
+      row.find(".edit-mode-btn, .btn-info").hide();
+      row.find(".save-row, .cancel-edit").show();
 
-          // 선택된 학생들의 ID 수집
-          const selectedStudents = [];
-          $("input[name='selected_students']:checked").each(function () {
-            selectedStudents.push($(this).val());
-          });
+      // 각 셀을 입력 필드로 변환하기 전에 원본 데이터 저장
+      row.find(".editable").each(function () {
+        const field = $(this).data("field");
+        let originalValue = $(this).text().trim();
+        // "-" 값을 빈 문자열로 변환
+        originalValue = originalValue === "-" ? "" : originalValue;
+        row.data(`original-${field}`, originalValue);
+      });
 
-          if (selectedStudents.length === 0) {
-            alert("변경할 학생을 선택해주세요.");
-            return;
-          }
+      // 각 셀을 입력 필드로 변환
+      row.find(".editable").each(function () {
+        let value = $(this).text().trim();
+        // "-" 값을 빈 문자열로 변환
+        value = value === "-" ? "" : value;
+        const field = $(this).data("field");
 
-          // 선택된 학생들의 ID를 hidden input으로 추가
-          $("#selectedStudentsContainer").empty();
-          selectedStudents.forEach(function (studentId) {
-            $("#selectedStudentsContainer").append(
-              `<input type="hidden" name="selected_students" value="${studentId}">`
-            );
-          });
-
-          // 모달 표시
-          $("#bulkUpdateModal").modal("show");
-        });
-
-        // 수정 버튼 클릭 시
-        $(".edit-mode-btn").click(function () {
-          const row = $(this).closest("tr");
-
-          // 수정/상세 버튼 숨기고 저장/취소 버튼 표시
-          row.find(".edit-mode-btn, .btn-info").hide();
-          row.find(".save-row, .cancel-edit").show();
-
-          // 각 셀을 입력 필드로 변환하기 전에 원본 데이터 저장
-          row.find(".editable").each(function () {
-            const field = $(this).data("field");
-            let originalValue = $(this).text().trim();
-            // "-" 값을 빈 문자열로 변환
-            originalValue = originalValue === "-" ? "" : originalValue;
-            row.data(`original-${field}`, originalValue);
-          });
-
-          // 각 셀을 입력 필드로 변환
-          row.find(".editable").each(function () {
-            let value = $(this).text().trim();
-            // "-" 값을 빈 문자열로 변환
-            value = value === "-" ? "" : value;
-            const field = $(this).data("field");
-
-            if (field === "grade") {
-              $(this).html(`
+        if (field === "grade") {
+          $(this).html(`
                 <select class="form-control form-control-sm">
                   <option value=""></option>
-                  <option value="1" ${value === "1" ? "selected" : ""}>1</option>
-                  <option value="2" ${value === "2" ? "selected" : ""}>2</option>
-                  <option value="3" ${value === "3" ? "selected" : ""}>3</option>
+                  <option value="1" ${
+                    value === "1" ? "selected" : ""
+                  }>1</option>
+                  <option value="2" ${
+                    value === "2" ? "selected" : ""
+                  }>2</option>
+                  <option value="3" ${
+                    value === "3" ? "selected" : ""
+                  }>3</option>
                 </select>
               `);
-            } else if (field === "registered_date") {
-              $(this).html(`
+        } else if (field === "registered_date") {
+          $(this).html(`
                 <input type="date" class="form-control form-control-sm" value="${value}">
               `);
-            } else {
-              $(this).html(
-                `<input type="text" class="form-control form-control-sm" value="${value}">`
-              );
+        } else {
+          $(this).html(
+            `<input type="text" class="form-control form-control-sm" value="${value}">`
+          );
+        }
+
+        // Enter 키와 ESC 키 이벤트 핸들러 추가
+        $(this)
+          .find("input, select")
+          .on("keydown", function (e) {
+            if (e.which === 13) {
+              // Enter 키
+              e.preventDefault();
+              $(this).closest("tr").find(".save-row").click();
+            } else if (e.which === 27) {
+              // ESC 키
+              e.preventDefault();
+              $(this).closest("tr").find(".cancel-edit").click();
+              return false; // 이벤트 전파 중단
             }
-
-            // Enter 키와 ESC 키 이벤트 핸들러 추가
-            $(this)
-              .find("input, select")
-              .on("keydown", function (e) {
-                if (e.which === 13) {
-                  // Enter 키
-                  e.preventDefault();
-                  $(this).closest("tr").find(".save-row").click();
-                } else if (e.which === 27) {
-                  // ESC 키
-                  e.preventDefault();
-                  $(this).closest("tr").find(".cancel-edit").click();
-                  return false; // 이벤트 전파 중단
-                }
-              });
           });
-        });
+      });
+    });
 
-        // 취소 버튼 클릭 시
-        $(".cancel-edit").click(function () {
-          const row = $(this).closest("tr");
+    // 취소 버튼 클릭 시
+    $(".cancel-edit").click(function () {
+      const row = $(this).closest("tr");
 
-          // 각 셀의 원래 데이터로 복원
-          row.find(".editable").each(function () {
-            const field = $(this).data("field");
-            let originalValue = row.data(`original-${field}`);
+      // 각 셀의 원래 데이터로 복원
+      row.find(".editable").each(function () {
+        const field = $(this).data("field");
+        let originalValue = row.data(`original-${field}`);
 
-            // 값이 없는 경우 '-' 표시
-            if (!originalValue || originalValue === "None") {
-              originalValue = "-";
-            }
-            $(this).html(originalValue);
-          });
+        // 값이 없는 경우 '-' 표시
+        if (!originalValue || originalValue === "None") {
+          originalValue = "-";
+        }
+        $(this).html(originalValue);
+      });
 
-          // 버튼 상태 복원
-          row.find(".edit-mode-btn, .btn-info").show();
-          row.find(".save-row, .cancel-edit").hide();
-        });
+      // 버튼 상태 복원
+      row.find(".edit-mode-btn, .btn-info").show();
+      row.find(".save-row, .cancel-edit").hide();
+    });
 
-        // 저장 버튼 클릭 시
-        $(".save-row").click(function () {
-          // save-row 라는 클래스(.)를 가진 요소를 클릭했을 때 아래 함수를 실행하라
-          const row = $(this).closest("tr"); // 클릭한 요소(this)에서 가장가까운(closest) <tr>태그를 찾아서 row 변수에 저장
-          const studentId = row.data("student-id"); // row 변수(=tr태그)의 data-student-id 라는 데이터 속성을 가진 요소를 찾아서 studentId 변수에 저장 (data- 형식은 다 문자열임, 비어있으면 '' 빈 문자열이 저장됨)
-          const updates = {}; // 빈 객체를 생성하여 그릇으로 사용
+    // 저장 버튼 클릭 시
+    $(".save-row").click(function () {
+      // save-row 라는 클래스(.)를 가진 요소를 클릭했을 때 아래 함수를 실행하라
+      const row = $(this).closest("tr"); // 클릭한 요소(this)에서 가장가까운(closest) <tr>태그를 찾아서 row 변수에 저장
+      const studentId = row.data("student-id"); // row 변수(=tr태그)의 data-student-id 라는 데이터 속성을 가진 요소를 찾아서 studentId 변수에 저장 (data- 형식은 다 문자열임, 비어있으면 '' 빈 문자열이 저장됨)
+      const updates = {}; // 빈 객체를 생성하여 그릇으로 사용
 
-          row.find(".editable").each(function () {
-            // row 변수(=tr태그)안의 자식 요소들 중에서 editable 클래스를 모두 찾고(find) 걔네들을 각각 순회(each)하며 아래 함수를 실행하라
-            const field = $(this).data("field"); // 각 요소의 data-field 라는 데이터 속성을 가진 요소를 찾아서 field 변수에 저장
-            const value = $(this).find("input, select").val(); // 각 요소(여기서는 editable 클래스를 가진 요소들) 내부의 input 또는 select 태그를 찾아서(find) 그 값(val())을 value 변수에 저장
-            updates[field] = value; // updates 객체에 field 변수를 키로, value 변수를 값으로 추가
-          });
+      row.find(".editable").each(function () {
+        // row 변수(=tr태그)안의 자식 요소들 중에서 editable 클래스를 모두 찾고(find) 걔네들을 각각 순회(each)하며 아래 함수를 실행하라
+        const field = $(this).data("field"); // 각 요소의 data-field 라는 데이터 속성을 가진 요소를 찾아서 field 변수에 저장
+        const value = $(this).find("input, select").val(); // 각 요소(여기서는 editable 클래스를 가진 요소들) 내부의 input 또는 select 태그를 찾아서(find) 그 값(val())을 value 변수에 저장
+        updates[field] = value; // updates 객체에 field 변수를 키로, value 변수를 값으로 추가
+      });
 
-          $.ajax({
-            // ajax 메소드를 사용하여 서버와 통신
-            url: '/students/${studentId}/update/'
-            method: "POST",
-            data: updates, // x-www-form-urlencoded
-    /*
+      $.ajax({
+        // ajax 메소드를 사용하여 서버와 통신
+        url: `/students/${studentId}/update/`, // 자바스크립트에서 변수를 포함하고 싶을 때 백틱(`) 사용 (파이썬의 f-string 같은 역할)
+        method: "POST",
+        data: updates, // x-www-form-urlencoded
+        /*
     전송할 데이터 = updates 객체, type은 기본값이 x-www-form-urlencoded
 
     *** $.ajax()는 기본적으로 x-www-form-urlencoded 방식으로 데이터를 전송함.
@@ -558,22 +585,21 @@
   cf) 반면에 파일 업로드와 같은 경우는 FormData를 사용해야 하며, 이때는 multipart/form-data 형식으로 전송
     */
 
-
-            headers: {
-              "X-CSRFToken": "{{ csrf_token }}",
-            },
-            success: function (response) {
-              if (response.status === "success") {
-                location.reload(); // 페이지 새로고침
-              } else {
-                alert(response.message); // 응답 데이터에 따른 알림창 띄우기
-              }
-            },
-            error: function () {
-              alert("저장 중 오류가 발생했습니다.");
-            },
-          });
-        });
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+        },
+        success: function (response) {
+          if (response.status === "success") {
+            location.reload(); // 페이지 새로고침
+          } else {
+            alert(response.message); // 응답 데이터에 따른 알림창 띄우기
+          }
+        },
+        error: function () {
+          alert("저장 중 오류가 발생했습니다.");
+        },
       });
+    });
+  });
 </script>
 {% endblock %}

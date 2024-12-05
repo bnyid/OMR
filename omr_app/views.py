@@ -181,10 +181,10 @@ def student_add(request):
             
             # 등록일이 입력된 경우 등록번호 생성
             if request.POST.get('registered_date'):
-                reg_date = request.POST['registered_date']
+                reg_date = request.POST['registered_date']  # YYYY-MM-DD 형식
                 # 해당 날짜의 등록 건수 확인
                 same_date_count = Student.objects.filter(
-                    registered_date__date=reg_date
+                    registered_date=reg_date
                 ).count()
                 
                 # 등록번호 생성 (YYMMDD_XX 형식)
@@ -197,7 +197,7 @@ def student_add(request):
                     registration_number = f"{date_str}_{str(same_date_count + 1).zfill(2)}"
                 
                 student_data['registration_number'] = registration_number
-                student_data['registered_date'] = f"{reg_date} 00:00:00"
+                student_data['registered_date'] = reg_date  # 시간 정보 제거
             
             student = Student.objects.create(**student_data)
             return JsonResponse({'status': 'success'})
@@ -220,74 +220,86 @@ def student_delete(request, student_id):
 
 @require_POST
 def bulk_action(request):
+    print("\n bulk_action 진입")
     selected_students = request.POST.getlist('selected_students')
+    print(f"\n selected_students: {selected_students}")
     action = request.POST.get('action')
-
+    print(f"\n action: {action}")
+    
     if not selected_students:
-        messages.error(request, "선택된 학생이 없습니다.")
-        return redirect('omr_app:student_list')
+        return JsonResponse({
+            'status': 'error',
+            'message': "선택된 학생이 없습니다."
+        })
 
-    if action == 'delete':
-        Student.objects.filter(id__in=selected_students).delete()
-        messages.success(request, "선택된 학생들이 삭제되었습니다.")
-    elif action == 'update':
-        new_class_name = request.POST.get('new_class_name')
-        new_school_name = request.POST.get('new_school_name')
-        new_grade = request.POST.get('new_grade')
+    try:
+        if action == 'delete':
+            Student.objects.filter(id__in=selected_students).delete()
+            return JsonResponse({
+                'status': 'success',
+                'message': "선택된 학생들이 삭제되었습니다."
+            })
+        elif action == 'update':
+            new_class_name = request.POST.get('new_class_name')
+            new_school_name = request.POST.get('new_school_name')
+            new_grade = request.POST.get('new_grade')
 
-        update_fields = {}
-        if new_class_name:
-            update_fields['class_name'] = new_class_name
-        if new_school_name:
-            update_fields['school_name'] = new_school_name
-        if new_grade:
-            update_fields['grade'] = new_grade
+            update_fields = {}
+            if new_class_name:
+                update_fields['class_name'] = new_class_name
+            if new_school_name:
+                update_fields['school_name'] = new_school_name
+            if new_grade:
+                update_fields['grade'] = new_grade
 
-        if update_fields:
-            Student.objects.filter(id__in=selected_students).update(**update_fields)
-            messages.success(request, "선택된 학생들의 정보가 변경되었습니다.")
-        else:
-            messages.error(request, "변경할 정보를 입력하세요.")
+            if update_fields:
+                Student.objects.filter(id__in=selected_students).update(**update_fields)
+                return JsonResponse({
+                    'status': 'success',
+                    'message': "선택된 학생들의 정보가 변경되었습니다."
+                })
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': "변경할 정보를 입력하세요."
+                })
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        })
 
-    return redirect('omr_app:student_list')
+    return JsonResponse({
+        'status': 'error',
+        'message': "잘못된 요청입니다."
+    })
 
 @require_POST
 def student_update(request, student_id): # url상의 <student_id> 변수를 받아오는 것임
     try:
         print("\n try문 진입")
         student = get_object_or_404(Student, id=student_id)
-        
-        # 업데이트할 필드들을 수집
         update_fields = {}
         fields = ['student_code', 'name', 'class_name', 'school_name', 'grade', 
                  'registered_date', 'phone_number', 'parent_phone', 'note']
         
-        print("\n=== 학생 정보 업데이트 디버깅 ===")
-        print(f"학생 ID: {student_id}")
-        
+        # 각 필드에 대해
         for field in fields:
             value = request.POST.get(field)
-            current_value = getattr(student, field)
+            value_on_db = getattr(student, field)
             
-            # 날짜 필드의 경우 문자열 형식 통일
-            if field == 'registered_date' and current_value:
-                current_value = current_value.strftime('%Y-%m-%d')
+            # DB의 현재 값을 문자열로 변환 (None인 경우 빈 문자열로)
+            value_on_db_str = str(value_on_db) if value_on_db is not None else ''
             
             print(f"\n필드명: {field}")
-            print(f"- POST로 전달된 값: '{value}'")
-            print(f"- 현재 DB 값: '{current_value}'")
-            print(f"- 값이 다른가?: {value != current_value}")
+            print(f"- POST로 전달된 값: {type(value)} : {value}")
+            print(f"- 현재 DB 값: {type(value_on_db)} : {value_on_db}")
+            print(f"value_on_db_str: {value_on_db_str}")
+            print(f"- 값이 다른가?: {value != value_on_db_str}")
             
-            # 현재 값과 다른 경우에만 업데이트 필드에 추가
-            if value != current_value:
-                if value == '':
-                    update_fields[field] = None
-                else:
-                    update_fields[field] = value
-        
-        print("\n최종 업데이트될 필드들:")
-        print(update_fields)
-        print("================================\n")
+            # 값이 다른 경우에만 업데이트
+            if value != value_on_db_str:
+                update_fields[field] = value if value != '' else None
         
         if update_fields:
             # registered_date가 실제로 변경된 경우에만 등록번호 처리
@@ -297,7 +309,7 @@ def student_update(request, student_id): # url상의 <student_id> 변수를 받�
                 else:
                     reg_date = update_fields['registered_date']
                     same_date_count = Student.objects.filter(
-                        registered_date__date=reg_date
+                        registered_date=reg_date
                     ).count()
                     
                     date_str = reg_date.replace('-', '')[2:]
