@@ -356,7 +356,38 @@
       });
 
       // 모달 표시
-      $("#bulkUpdateModal").modal("show");
+      $("#bulkUpdateModal").modal("show"); // id가 bulkUpdateModal인 요소를 찾아서 모달 표시
+    });
+
+    // 일괄 변경 폼 제출 시
+    $("#bulkUpdateForm").on("submit", function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(this);
+      formData.append("action", "update"); // action 파라미터 추가
+
+      $.ajax({
+        url: "{% url 'omr_app:bulk_action' %}",
+        method: "POST",
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+        },
+        success: function (response) {
+          if (response.status === "success") {
+            location.reload();
+          } else {
+            alert(response.message || "변경 중 오류가 발생했습니다.");
+          }
+          $("#bulkUpdateModal").modal("hide");
+        },
+        error: function (xhr, status, error) {
+          console.error("Error:", xhr.responseText);
+          alert("서버 오류가 발생했습니다. 다시 시도해주세요.");
+        },
+      });
     });
 
     // 수정 버튼 클릭 시
@@ -498,4 +529,70 @@
     });
   });
 </script>
+
+<!-- 일괄 변경 모달 -->
+<div
+  class="modal fade"
+  id="bulkUpdateModal"
+  tabindex="-1"
+  aria-labelledby="bulkUpdateModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="bulkUpdateModalLabel">
+          학생 정보 일괄 변경
+        </h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form id="bulkUpdateForm" method="post">
+          {% csrf_token %}
+          <div id="selectedStudentsContainer"></div>
+          <div class="mb-3">
+            <label for="new_class_name" class="form-label">소속반</label>
+            <input
+              type="text"
+              class="form-control"
+              id="new_class_name"
+              name="new_class_name"
+            />
+          </div>
+          <div class="mb-3">
+            <label for="new_school_name" class="form-label">학교명</label>
+            <input
+              type="text"
+              class="form-control"
+              id="new_school_name"
+              name="new_school_name"
+            />
+          </div>
+          <div class="mb-3">
+            <label for="new_grade" class="form-label">학년</label>
+            <select class="form-control" id="new_grade" name="new_grade">
+              <option value="">선택</option>
+              <option value="1">1학년</option>
+              <option value="2">2학년</option>
+              <option value="3">3학년</option>
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          취소
+        </button>
+        <button type="submit" class="btn btn-primary" form="bulkUpdateForm">
+          변경
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
