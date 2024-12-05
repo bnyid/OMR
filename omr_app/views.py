@@ -7,7 +7,7 @@ from .omr_processors.main import process_omr_image
 from .omr_processors.omr_data_processing import handle_image_file
 from django.views.decorators.http import require_POST
 from django.contrib import messages
-from django.db.models import F, Value, DateField
+from django.db.models import F, Value
 from django.db.models.functions import Coalesce
 
 def omr_upload(request):
@@ -35,7 +35,7 @@ def omr_process(request):
                 student_id=result_df['학번'].iloc[0],
                 student_name=result_df['이름'].iloc[0],
                 answer_sheet=image_file,
-                answers=result_df.to_dict('records') # 전체 result_df를 딕셔너���로 변환하여 저장(시행일부터 답안까지) 
+                answers=result_df.to_dict('records') # 전체 result_df를 딕셔너리로 변환하여 저장(시행일부터 답안까지) 
             )
 
             return JsonResponse({
