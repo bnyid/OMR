@@ -119,6 +119,7 @@ def student_list(request):
         return render(request, 'omr_app/student_list.html', {
             'students': students, # 전체 df를 테이블에 표시하기 위함
             'grades': [1, 2, 3], # 학년 드롭다운 option 값으로 사용됨
+            'schools': Student.objects.values_list('school_name', flat=True).distinct(), # 학교 드롭다운 option 값으로 사용됨
             'class_names': Student.objects.values_list('class_name', flat=True).distinct() # 반 드롭다운 option 값으로 사용됨 
         })
         

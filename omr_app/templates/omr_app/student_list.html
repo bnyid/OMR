@@ -1,6 +1,14 @@
 {% extends 'base.html' %} {% block content %}
 
 <style>
+  /* 필터 라벨 정렬 */
+  .form-label {
+    text-align: center;
+    width: 100%;
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+
   input[type="checkbox"] {
     width: 13px;
     height: 13px;
@@ -14,6 +22,44 @@
   .editing {
     padding: 0 !important;
   }
+
+  /* 페이지네이션 스타일 */
+  #table-pagination {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+  }
+
+  #table-pagination .dataTables_paginate {
+    margin: 0;
+    padding: 0;
+  }
+
+  #table-pagination .paginate_button {
+    padding: 0.05rem 0.1rem;
+    margin: 0 0.025rem;
+    border: 1px solid #dee2e6;
+    background-color: #fff !important;
+    cursor: pointer;
+    font-size: 0.2rem;
+  }
+
+  #table-pagination .paginate_button:hover {
+    background-color: #e9ecef !important;
+    border-color: #dee2e6;
+  }
+
+  #table-pagination .paginate_button.current {
+    background-color: #0d6efd !important;
+    color: #fff !important;
+    border-color: #0d6efd;
+  }
+
+  #table-pagination .paginate_button.previous,
+  #table-pagination .paginate_button.next {
+    font-size: 0.7rem;
+  }
+
   /* 입력 필드와 select 요소 스타일 수정 */
   .form-control-sm,
   select.form-control-sm,
@@ -92,6 +138,69 @@
   </div>
 </div>
 
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <!-- 소속반 필터 -->
+      <div class="col-md-2">
+        <label class="form-label">소속반</label>
+        <select class="form-select form-select-sm" id="classFilter">
+          <option value="">전체</option>
+          {% for class_name in class_names %} {% if class_name %}
+          <!-- 빈 값이 아닌 경우만 표시 -->
+          <option value="{{ class_name }}">{{ class_name }}</option>
+          {% endif %} {% endfor %}
+        </select>
+      </div>
+
+      <!-- 학교 필터 -->
+      <div class="col-md-2">
+        <label class="form-label">학교</label>
+        <select class="form-select form-select-sm" id="schoolFilter">
+          <option value="">전체</option>
+          {% for school in schools %} {% if school %}
+          <option value="{{ school }}">{{ school }}</option>
+          {% endif %} {% endfor %}
+        </select>
+      </div>
+
+      <!-- 학년 필터 -->
+      <div class="col-md-2">
+        <label class="form-label">학년</label>
+        <select class="form-select form-select-sm" id="gradeFilter">
+          <option value="">전체</option>
+          {% for grade in grades %}
+          <option value="{{ grade }}">{{ grade }}학년</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- 이름 검색 -->
+      <div class="col-md-3">
+        <label class="form-label">이름</label>
+        <input
+          type="text"
+          class="form-control form-control-sm"
+          id="nameSearch"
+          placeholder="이름을 입력"
+        />
+      </div>
+
+      <!-- 필터 초기화 버튼 -->
+      <div class="col-md-2">
+        <button id="resetFilters" class="btn btn-secondary btn-sm">
+          필터 초기화
+        </button>
+      </div>
+
+      <!-- 페이지네이션 -->
+      <div class="col-md-1 ms-auto">
+        <div id="table-pagination"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-body">
     <form
@@ -100,7 +209,7 @@
       action="{% url 'omr_app:bulk_action' %}"
     >
       {% csrf_token %}
-      <table class="table table-striped">
+      <table class="table table-striped" id="studentTable">
         <thead>
           <tr>
             <th><input type="checkbox" id="selectAll" /></th>
@@ -192,13 +301,77 @@
 
 <script>
   $(document).ready(function () {
+    // document가 준비되면, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
     // DataTable 초기화
-    $("#studentTable").DataTable({
+    var table = $("#studentTable").DataTable({
+      dom: 'rt<"bottom"p>', // 테이블(t)과 하단에 페이지네이션(p)만 표시
+      stateSave: false,
+      order: [[2, "asc"]], // 세 번째 열(=2)에 대해 등록번호 기준 오름차순(=asc) 정렬
+      pageLength: 25, // 한 페이지에 표시할 학생 수
+      lengthMenu: [25, 50, 100], // 한 페이지에 표시할 학생 수 선택 메뉴
+      pagingType: "simple_numbers", // 페이지네이션 타입 설정
       language: {
-        url: "//cdn.datatables.net/plug-ins/1.11.5/i18n/ko.json",
+        paginate: {
+          previous: "◀",
+          next: "▶",
+        },
       },
-      order: [[0, "desc"]], // 등록일 기준 내림차순 정렬
-      pageLength: 25,
+      // 페이지네이션을 커스텀 위치로 이동
+      drawCallback: function (settings) {
+        var pagination = $(this)
+          .closest(".dataTables_wrapper")
+          .find(".dataTables_paginate");
+        $("#table-pagination").html(pagination);
+      },
+
+      // 검색 필드 개별 설정
+
+      columnDefs: [
+        { targets: [4], searchable: true }, // 이름 열 (4는 4번째 열을 의미)
+        { targets: [5], searchable: true }, // 소속반 열
+        { targets: [6], searchable: true }, // 학교 열
+        { targets: [7], searchable: true }, // 학년 열
+        { targets: "_all", searchable: false }, // _all은 모든 열을 의미하는데, 위에 설정한 열을 제외한 나머지 열은 검색 불가능하게 만들어, 효율성,속도를 향상시킴.
+      ],
+    });
+
+    // 소속반 필터 적용
+    $("#classFilter").on("change", function () {
+      // id가 classFilter인 요소의 change이벤트가 발생시, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
+      table.column(5).search(this.value).draw(); // table객체에 대해 5번째 열(소속반)에 대해 this.value값(해당 태그 안의 option value값)을 검색하고 테이블을 다시 그림draw().
+    });
+
+    // 학교 필터 적용
+    $("#schoolFilter").on("change", function () {
+      table.column(6).search(this.value).draw();
+    });
+
+    // 학년 필터 적용
+    $("#gradeFilter").on("change", function () {
+      table.column(7).search(this.value).draw();
+    });
+
+    // 이름 검색
+    $("#nameSearch").on("keyup", function () {
+      table.column(4).search(this.value).draw();
+    });
+
+    // 필터 초기화
+    $("#resetFilters").on("click", function () {
+      // 모든 필터 초기화
+      $("#classFilter, #schoolFilter, #gradeFilter").val(""); // id가 classFilter, schoolFilter, gradeFilter인 요소의 value값을 빈 문자열로 초기화
+      $("#nameSearch").val(""); // id가 nameSearch인 요소의 value값을 빈 문자열로 초기화
+
+      // 모든 체크박스 해제
+      $("#selectAll").prop("checked", false); // prop() 메서드는 선택 요소의 속성값을 설정하거나 반환함.
+      $("input[name='selected_students']").prop("checked", false); // name이 selected_students인 모든 요소(=개별 체크 박스)의 checked 속성을 false로 설정
+
+      // 테이블 필터와 정렬 초기화
+      table
+        .search("") // 전역 검색어 초기화
+        .columns();
+      table.order([[2, "asc"]]); // 등록번호(3번째 열=2) 기준 오름차순("asc")으로 초기화
+      table.draw(); // 테이블 다시 그리기
     });
 
     // 학생 추가 버튼 클릭 시
@@ -232,8 +405,8 @@
         `;
       $("table tbody").append(newRow);
 
-      // 새로 추가된 행의 모든 input과 select 요소에 대해 Enter 키 이벤트 핸들러 추가
-      $(".new-student-row") // 클래스가 new-student-row인 요소를 찾아서
+      // 새로 추가된 행의 모든 input과 select 요소에 대�� Enter 키 이벤트 핸들러 추가
+      $(".new-student-row") // 클스가 new-student-row인 요소를 찾아서
         .find("input, select") // 그 요소 내부에서 input과 select 요소를 찾아서
         .on("keydown", function (e) {
           // 그 요소에서 키가 눌렸을때(=keydown이벤트), 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
@@ -343,7 +516,7 @@
       });
 
       if (selectedStudents.length === 0) {
-        alert("변경할 학생을 선택해주세요.");
+        alert("변경할 학생 선택해주세요.");
         return;
       }
 
@@ -482,7 +655,7 @@
     $(".save-row").click(function () {
       // save-row 라는 클래스(.)를 가진 요소를 클릭했을 때 아래 함수를 실행하라
       const row = $(this).closest("tr"); // 클릭한 요소(this)에서 가장가까운(closest) <tr>태그를 찾아서 row 변수에 저장
-      const studentId = row.data("student-id"); // row 변수(=tr태그)의 data-student-id 라는 데이터 속성을 가진 요소를 찾아서 studentId 변수에 저장 (data- 형식은 다 문자열임, 비어있으면 '' 빈 문자열이 저장됨)
+      const studentId = row.data("student-id"); // row 변수(=tr태그)의 data-student-id 는 데이터 속성을 가진 요소를 찾아서 studentId 변수에 저장 (data- 형식은 다 문자열임, 비어있으면 '' 빈 문자열이 저장됨)
       const updates = {}; // 빈 객체를 생성하여 그릇으로 사용
 
       row.find(".editable").each(function () {
@@ -523,7 +696,7 @@
           }
         },
         error: function () {
-          alert("저장 중 오류가 발생했습니다.");
+          alert("저장 중 오류가 발생했습니���.");
         },
       });
     });
