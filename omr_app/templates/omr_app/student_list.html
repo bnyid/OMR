@@ -23,43 +23,6 @@
     padding: 0 !important;
   }
 
-  /* 페이지네이션 스타일 */
-  #table-pagination {
-    display: inline-flex;
-    align-items: center;
-    margin: 0;
-  }
-
-  #table-pagination .dataTables_paginate {
-    margin: 0;
-    padding: 0;
-  }
-
-  #table-pagination .paginate_button {
-    padding: 0.05rem 0.1rem;
-    margin: 0 0.025rem;
-    border: 1px solid #dee2e6;
-    background-color: #fff !important;
-    cursor: pointer;
-    font-size: 0.2rem;
-  }
-
-  #table-pagination .paginate_button:hover {
-    background-color: #e9ecef !important;
-    border-color: #dee2e6;
-  }
-
-  #table-pagination .paginate_button.current {
-    background-color: #0d6efd !important;
-    color: #fff !important;
-    border-color: #0d6efd;
-  }
-
-  #table-pagination .paginate_button.previous,
-  #table-pagination .paginate_button.next {
-    font-size: 0.7rem;
-  }
-
   /* 입력 필드와 select 요소 스타일 수정 */
   .form-control-sm,
   select.form-control-sm,
@@ -142,7 +105,7 @@
   <div class="card-body">
     <div class="row g-3 align-items-end">
       <!-- 소속반 필터 -->
-      <div class="col-md-2">
+      <div class="col-md-1">
         <label class="form-label">소속반</label>
         <select class="form-select form-select-sm" id="classFilter">
           <option value="">전체</option>
@@ -154,7 +117,7 @@
       </div>
 
       <!-- 학교 필터 -->
-      <div class="col-md-2">
+      <div class="col-md-1">
         <label class="form-label">학교</label>
         <select class="form-select form-select-sm" id="schoolFilter">
           <option value="">전체</option>
@@ -165,7 +128,7 @@
       </div>
 
       <!-- 학년 필터 -->
-      <div class="col-md-2">
+      <div class="col-md-1">
         <label class="form-label">학년</label>
         <select class="form-select form-select-sm" id="gradeFilter">
           <option value="">전체</option>
@@ -176,13 +139,13 @@
       </div>
 
       <!-- 이름 검색 -->
-      <div class="col-md-3">
+      <div class="col-md-2">
         <label class="form-label">이름</label>
         <input
           type="text"
           class="form-control form-control-sm"
           id="nameSearch"
-          placeholder="이름을 입력"
+          placeholder="이름 검색"
         />
       </div>
 
@@ -191,11 +154,7 @@
         <button id="resetFilters" class="btn btn-secondary btn-sm">
           필터 초기화
         </button>
-      </div>
-
-      <!-- 페이지네이션 -->
-      <div class="col-md-1 ms-auto">
-        <div id="table-pagination"></div>
+        <div class="ms-2" id="studentCount"></div>
       </div>
     </div>
   </div>
@@ -304,28 +263,22 @@
     // document가 준비되면, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
     // DataTable 초기화
     var table = $("#studentTable").DataTable({
-      dom: 'rt<"bottom"p>', // 테이블(t)과 하단에 페이지네이션(p)만 표시
+      dom: 'rt<"bottom"p>', // 테이블만 표시
       stateSave: false,
       order: [[2, "asc"]], // 세 번째 열(=2)에 대해 등록번호 기준 오름차순(=asc) 정렬
-      pageLength: 25, // 한 페이지에 표시할 학생 수
+      pageLength: 50, // 한 페이지에 표시할 학생 수
       lengthMenu: [25, 50, 100], // 한 페이지에 표시할 학생 수 선택 메뉴
-      pagingType: "simple_numbers", // 페이지네이션 타입 설정
-      language: {
-        paginate: {
-          previous: "◀",
-          next: "▶",
-        },
-      },
-      // 페이지네이션을 커스텀 위치로 이동
       drawCallback: function (settings) {
-        var pagination = $(this)
-          .closest(".dataTables_wrapper")
-          .find(".dataTables_paginate");
-        $("#table-pagination").html(pagination);
+        // 필터링된 데이터의 수를 가져옴
+        var api = this.api();
+        var total = api.rows().count();
+        var filtered = api.rows({ search: "applied" }).count();
+
+        // 결과를 표시
+        $("#studentCount").html(
+          `<span class="badge bg-primary">count : ${filtered}</span>`
+        );
       },
-
-      // 검색 필드 개별 설정
-
       columnDefs: [
         { targets: [4], searchable: true }, // 이름 열 (4는 4번째 열을 의미)
         { targets: [5], searchable: true }, // 소속반 열
@@ -369,9 +322,11 @@
       // 테이블 필터와 정렬 초기화
       table
         .search("") // 전역 검색어 초기화
-        .columns();
-      table.order([[2, "asc"]]); // 등록번호(3번째 열=2) 기준 오름차순("asc")으로 초기화
-      table.draw(); // 테이블 다시 그리기
+        .columns()
+        .search("");
+      table
+        .order([[2, "asc"]]) // 등록번호(3번째 열=2) 기준 오름차순("asc")으로 초기화
+        .draw(); // 테이블 다시 그리기
     });
 
     // 학생 추가 버튼 클릭 시
@@ -405,7 +360,7 @@
         `;
       $("table tbody").append(newRow);
 
-      // 새로 추가된 행의 모든 input과 select 요소에 대�� Enter 키 이벤트 핸들러 추가
+      // 새로 추가된 행의 모든 input과 select 요소에 대 Enter 키 이벤트 핸들러 추가
       $(".new-student-row") // 클스가 new-student-row인 요소를 찾아서
         .find("input, select") // 그 요소 내부에서 input과 select 요소를 찾아서
         .on("keydown", function (e) {
@@ -696,7 +651,7 @@
           }
         },
         error: function () {
-          alert("저장 중 오류가 발생했습니���.");
+          alert("저장 중 오류가 발생했습니다.");
         },
       });
     });

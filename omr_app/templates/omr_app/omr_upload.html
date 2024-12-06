@@ -32,6 +32,8 @@
     e.preventDefault(); // 기본 동작 중단 (폼의 기본 제출 동작 방지 : 페이지 새로고침 방지)
     const formData = new FormData(e.target); // 모든 입력값을 담기 위한 form 객체 선언 : e = 이벤트 객체, target = 이벤트 객체에 담긴 요소(여기서는 이미지 파일)
     const resultDiv = document.getElementById("result"); // 결과를 표시할 div 요소를 선택함 ex. <div id="result"></div>를 찾아서 변수에 저장
+    const resultDetailUrl =
+      "{% url 'omr_app:omr_result_detail' 999999 %}".replace("999999", ""); // url 패턴을 변수로 저장해서 장고 템플릿 태그를 사용할 수 있도록 함
 
     try {
       const response = await fetch('{% url "omr_app:omr_process" %}', {
@@ -51,7 +53,7 @@
                     시험일: ${data.data.exam_date}<br>
                     반: ${data.data.class_code}
                     <br><br>
-                    <a href="/omr/results/${data.data.id}" class="btn btn-info">상세 결과 보기</a>
+                    <a href="${resultDetailUrl}${data.data.id}" class="btn btn-info">상세 결과 보기</a>
                 </div>
             `;
       } else {
