@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-
+import fitz
 
 ##################### STEP 1: 이미지 전처리 및 이미지 기울기 보정 #####################
 

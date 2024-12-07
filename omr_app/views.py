@@ -5,7 +5,8 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import OMRResult, Student
 
 from .services.omr_service import omr_image_to_OMRResult
-from .services.student_service import update_students, generate_registration_number
+from .services.student_service import update_students, generate_registration_number, create_student
+
 
 from django.views.decorators.http import require_POST
 from django.db.models import F, Value, DateField
@@ -135,62 +136,31 @@ def student_detail(request, student_id):
 def student_add(request):
     if request.method == 'POST':
         try:
-            # 필수 필드인 이름만 먼저 확인
-            if not request.POST.get('name'):
-                return JsonResponse({
-                    'status': 'error',
-                    'message': '이름은 필수 입력 항목입니다.'
-                })
-            
-            # 기본 데이터 구성 (이름만 필수)
-            student_data = {
-                'name': request.POST['name']
-            }
+            student_data = {'name': request.POST.get('name')}
             
             # 선택적 필드들 처리
             optional_fields = [
-                'student_id', 'class_name', 'school_type', 
-                'school_name', 'grade', 'phone_number', 
-                'parent_phone', 'note'
+                'registered_date', 'student_id', 'class_name', 
+                'school_type', 'school_name', 'grade', 
+                'phone_number', 'parent_phone', 'note', 
             ]
             
             # 입력된 선택적 필드만 student_data에 추가
             for field in optional_fields:
-                if request.POST.get(field):
+                val = request.POST.get(field)
+                if val:
                     # grade는 정수형으로 변환 필요
                     if field == 'grade':
-                        student_data[field] = int(request.POST[field])
+                        student_data[field] = int(val)
                     else:
-                        student_data[field] = request.POST[field]
+                        student_data[field] = val
             
-            # 등록일이 입력된 경우 등록번호 생성
-            if request.POST.get('registered_date'):
-                reg_date = request.POST['registered_date']  # YYYY-MM-DD 형식
-                # 해당 날짜의 등록 건수 확인
-                same_date_count = Student.objects.filter(
-                    registered_date=reg_date
-                ).count()
-                
-                # 등록번호 생성 (YYMMDD_XX 형식)
-                date_str = reg_date.replace('-', '')[2:]
-                registration_number = f"{date_str}_{str(same_date_count + 1).zfill(2)}"
-                
-                # 중복 확인 및 조정
-                while Student.objects.filter(registration_number=registration_number).exists():
-                    same_date_count += 1
-                    registration_number = f"{date_str}_{str(same_date_count + 1).zfill(2)}"
-                
-                student_data['registration_number'] = registration_number
-                student_data['registered_date'] = reg_date  # 시간 정보 제거
+            create_student(student_data)
             
-            student = Student.objects.create(**student_data)
             return JsonResponse({'status': 'success'})
             
         except Exception as e:
-            return JsonResponse({
-                'status': 'error',
-                'message': str(e)
-            })
+            return JsonResponse({'status': 'error','message': str(e)})
 
 
 

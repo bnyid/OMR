@@ -1,3 +1,4 @@
+# models.py
 from django.db import models
 
 class Student(models.Model):
@@ -225,6 +226,13 @@ class OMRResult(models.Model):
     exam_date = models.DateField('시험 날짜')
     class_code = models.CharField('반 코드', max_length=2)
     student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True)
+
+    # 현재 이 OMR이 매칭 상태인지 표시하는 boolean
+    is_matched = models.BooleanField('매칭 여부', default=False)
+    
+    # 학생이 아직 등록되지 않았거나 매칭되지 않은 경우 여기에 학번 기입
+    unmatched_student_code = models.CharField('미매칭 학생코드', max_length=8, null=True, blank=True)
+    
     answer_sheet = models.ImageField('답안지', upload_to='answer_sheets/')
     processed_sheet = models.ImageField('처리된 답안지', upload_to='processed_sheets/', null=True, blank=True)
     answers = models.JSONField('답안 결과')
@@ -236,3 +244,6 @@ class OMRResult(models.Model):
 
     def __str__(self):
         return f"{self.exam_date} - {self.class_code} - {self.student_name}"
+    
+    
+    

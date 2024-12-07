@@ -1,3 +1,4 @@
+# omr_service.py
 import cv2
 import numpy as np
 import pandas as pd
@@ -106,7 +107,7 @@ def omr_image_to_OMRResult(image_file):
                             first_row_gap=13,
                             roi_size=(25,15),
                             threshold=0.5,
-                            show_result=False)
+                            show_result=True)
     student_code = convert_marking_to_number(id_marking_result, read_by_column=True)
     
     '''이전 파라미터 기록 (삭제금지)
@@ -190,20 +191,36 @@ def omr_image_to_OMRResult(image_file):
     })
     
     # df로 부터 OMRResult 객체 생성 파라미터 추출
-    student = Student.objects.get(student_code=result_df['학번'].iloc[0]) # result_df의 student_code를 통해 Student객체 찾는 로직)
     exam_date = f"20{result_df['시행일'].iloc[0]}"
     class_code = result_df['반코드'].iloc[0]
     answers = result_df.to_dict('records')
     answer_sheet = image_file
     
-    # OMRResult 생성
-    omr_result_obj = OMRResult.objects.create(
-        student=student,
-        exam_date=exam_date,
-        class_code=class_code,
-        answers=answers,
-        answer_sheet=answer_sheet,
-    )
+    extracted_student_code = result_df['학번'].iloc[0]
+    try:
+        student = Student.objects.get(student_code=extracted_student_code) # result_df의 student_code를 통해 Student객체 찾는 로직)
+        # 학생 있음 -> 매칭 완료
+        omr_result_obj = OMRResult.objects.create(
+            exam_date=exam_date,
+            class_code=class_code,
+            student=student,
+            is_matched=True,
+            unmatched_student_code=None,
+            answers=answers,
+            answer_sheet=answer_sheet,
+        )
+        
+    except Student.DoesNotExist:
+        # 학생 없음 -> 미매칭 상태로 저장
+        omr_result_obj = OMRResult.objects.create(
+            exam_date=exam_date,
+            class_code=class_code,
+            is_matched=False,
+            student=None,
+            unmatched_student_code=extracted_student_code,
+            answers=answers,
+            answer_sheet=answer_sheet,
+        )
     
     return omr_result_obj   
 
