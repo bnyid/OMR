@@ -3,8 +3,10 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import OMRResult, Student
+from django.db.models import Q
 
-from .services.omr_service import omr_image_to_OMRResult
+
+from .services.omr_service import process_pdf_and_extract_omr, extract_omr_data_from_image
 from .services.student_service import update_students, generate_registration_number, create_student
 
 
@@ -12,27 +14,96 @@ from django.views.decorators.http import require_POST
 from django.db.models import F, Value, DateField
 from django.db.models.functions import Coalesce
 
+from pdf2image import convert_from_bytes
+from django.views.decorators.http import require_POST
+import json
+
+
+@require_POST
+def finalize(request):
+    data = json.loads(request.body)
+    temp_exam_name = data.get('temp_exam_name')
+    omr_list = data.get('omr_data', [])
+
+    for omr in omr_list:
+        exam_date_str = omr['exam_date'] # 'YYYY-MM-DD'
+        exam_order = omr['exam_order']
+        is_matched = omr['is_matched']
+        student_code = omr['student_code']
+        student_name = omr['student_name']
+        answers = omr['answers']
+
+        exam_date = datetime.strptime(exam_date_str, "%Y-%m-%d").date()
+
+        # Student 매칭
+        student = None
+        if is_matched and student_code:
+            try:
+                student = Student.objects.get(student_code=student_code)
+            except Student.DoesNotExist:
+                # 매칭 안되면 unmatched로 처리
+                is_matched = False
+
+        OMRResult.objects.create(
+            exam_date=exam_date,
+            exam_order=exam_order,
+            student=student if is_matched else None,
+            is_matched=is_matched,
+            unmatched_student_code=None if is_matched else student_code,
+            unmatched_student_name=None if is_matched else student_name,
+            answers=answers,
+            temp_exam_name=temp_exam_name
+        )
+
+    return JsonResponse({'status':'success'})
+
+
+
+from django.db.models import Q
+
+def student_search(request):
+    q = request.GET.get('q', '')
+    students = Student.objects.filter(
+        Q(name__icontains=q) | Q(student_code__icontains=q)
+    )[:50]
+    data = []
+    for st in students:
+        data.append({
+            'id': st.id,
+            'student_code': st.student_code,
+            'name': st.name,
+            'class_name': st.class_name,
+        })
+    return JsonResponse(data, safe=False)
+
 
 def show_omr_upload_page(request):
     return render(request, 'omr_app/omr_upload.html')
 
 @csrf_exempt
 def omr_process(request):
-    if request.method == 'POST' and request.FILES.get('image'):
+    if request.method == 'POST' and request.FILES.get('file'):
+        uploaded_file = request.FILES['file']
         
-        result = omr_image_to_OMRResult(request.FILES['image'])
-
+        
+        # 파일 확장자나 Content_Type으로 PDF vs Image 판별
+        file_name = uploaded_file.name.lower()
+        
+        if file_name.endswith('.pdf'):
+            # PDF -> 여러 페이지 처리
+            omr_results = process_pdf_and_extract_omr(uploaded_file)
+             # omr_results는 [{exam_date, exam_order, student_code, student_name, answers}, ...] 형태의 리스트
+        else:
+            # 이미지 단일 처리
+            # 단일 이미지일 경우 기존 함수와 동일하게 처리
+            # extract_omr_Data_from_image 호출
+            omr_data = extract_omr_data_from_image(uploaded_file)
+            omr_results = [omr_data]
         return JsonResponse({
-            'status': 'success', # 성공적으로 처리되었음을 알리고
-            'data': {
-                'id': result.id, # 생성된 OMRResult 객체의 id를 반환
-                'exam_date': f"20{result.exam_date}",
-                'class_code': result.class_code,
-                'student_id': result.student_id,
-                'student_name': result.student_name,
-                'answers': result.answers # result_df를 딕셔너리로 변환하여 반환
-            }
+            'status': 'success',
+            'data': omr_results # 리스트 형태로 반환
         })
+    
     return JsonResponse({
         'status': 'error',
         'message': '잘못된 요청입니다.'

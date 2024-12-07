@@ -4,8 +4,8 @@ from .models import OMRResult, Student
 
 @admin.register(OMRResult)
 class OMRResultAdmin(admin.ModelAdmin):
-    list_display = ('exam_date', 'class_code', 'get_student_code', 'get_student_name', 'created_at')
-    list_filter = ('exam_date', 'class_code')
+    list_display = ('exam_date', 'exam_order', 'exam_identifier', 'is_matched', 'get_student_code', 'get_student_name', 'created_at')
+    list_filter = ('exam_date', 'exam_order', 'exam_identifier')
     search_fields = ('student__student_code', 'student__name')
 
     def get_student_code(self, obj):

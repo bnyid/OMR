@@ -1,7 +1,9 @@
+# _omr_service_sub.py
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import fitz
+from pdf2image import convert_from_bytes
 
 ##################### STEP 1: 이미지 전처리 및 이미지 기울기 보정 #####################
 
@@ -217,8 +219,8 @@ def get_omr_area_image(contour, gray_image, show_result=False):
 ##################### STEP 4: 외곽선에서 마킹 영역만 추출 #####################
 
 def extract_marking_area(omr_area, 
-                         skip_x=(True, 80, 300000),  # (스킵여부, 시작x좌표, 임계값)
-                         skip_y=(True, 190, 60000),  # (스킵여부, 시작y좌표, 임계값)
+                         skip_x=(True, 80, 300000, 40000), # (스킵여부, 시작x좌표, 1차임계값, 2차임계값)
+                         skip_y=(True, 190, 40000, 15000),  # (스킵여부, 시작y좌표, 1차임계값, 2차임계값)
                          show_result=False,
                          ):
     """주어진 OMR 이미지에서 순수 마킹 영역만 추출
@@ -246,18 +248,22 @@ def extract_marking_area(omr_area,
     check_interval_x = 20     # 다음 피크를 체크할 간격
     
     # skip_x 파라미터 분해
-    do_skip_x, skip_initial_x, vertical_threshold = skip_x
+    do_skip_x, skip_initial_x, vertical_threshold, secondary_threshold_x = skip_x
     
     # x축 스킵이 활성화된 경우에만 처리
     if do_skip_x:
         start_x = skip_initial_x
         while start_x < len(vertical_proj) - check_interval_x:
-            if vertical_proj[start_x] > vertical_threshold:
+            val = vertical_proj[start_x]
+            if val > vertical_threshold:
+                # 다음 interval 구간에 더 큰 피크가 없으면 1차 임계값 충족
                 next_section = vertical_proj[start_x+1:start_x+1 + check_interval_x]
                 if np.max(next_section) < vertical_threshold:
+                    # 1차 임계값 충족한 뒤, 2차 임계값 이하로 내려갈 떄까지 start_x 증가
+                    while start_x < len(vertical_proj) and vertical_proj[start_x] > secondary_threshold_x:
+                        start_x += 1
                     break
             start_x += 1
-        print("최종 start_x: ", start_x)
         inner_area = inner_area[:, start_x:]
     
     # 수평 프로젝션 계산
@@ -265,18 +271,21 @@ def extract_marking_area(omr_area,
     check_interval = 20
     
     # skip_y 파라미터 분해
-    do_skip_y, skip_initial_y, horizontal_threshold = skip_y
+    do_skip_y, skip_initial_y, horizontal_threshold, secondary_threshold_y = skip_y
     
     # y축 스킵이 활성화된 경우에만 처리
     if do_skip_y:
         start_y = skip_initial_y
         while start_y < len(horizontal_proj) - check_interval:
-            if horizontal_proj[start_y] > horizontal_threshold:
+            val = horizontal_proj[start_y]
+            if val > horizontal_threshold:
                 next_section = horizontal_proj[start_y+1:start_y+1 + check_interval]
                 if np.max(next_section) < horizontal_threshold:
+                    # 1차 임계값 충족한 뒤, 2차 임계값 이하로 내려갈 떄까지 start_y 증가
+                    while start_y < len(horizontal_proj) and horizontal_proj[start_y] > secondary_threshold_y:
+                        start_y += 1
                     break
             start_y += 1
-        print("최종 start_y: ", start_y)
         marking_area = inner_area[start_y:, :]
     else:
         marking_area = inner_area
@@ -598,5 +607,232 @@ def convert_marking_to_hangul(marking_result, read_by_column=True):
     print(result)
     return ''.join(result)
 
+
+
+
+
+
+####### 새롭게 추진중 #########
+
+import cv2
+import numpy as np
+
+def order_points(pts):
+    """
+    4개의 점을 [좌상, 우상, 좌하, 우하] 순서로 정렬
+    """
+    pts = np.array(pts, dtype="float32")
+    x_sorted = pts[np.argsort(pts[:, 0]), :]
+    left_two = x_sorted[:2]
+    right_two = x_sorted[2:]
+
+    # 왼쪽 두 점 중 y가 작은게 top, 큰게 bottom
+    left_top = left_two[np.argsort(left_two[:,1])[0]]
+    left_bottom = left_two[np.argsort(left_two[:,1])[1]]
+
+    # 오른쪽 두 점 중 y가 작은게 top, 큰게 bottom
+    right_top = right_two[np.argsort(right_two[:,1])[0]]
+    right_bottom = right_two[np.argsort(right_two[:,1])[1]]
+
+    # 순서: 좌상, 우상, 좌하, 우하
+    ordered = np.array([left_top, right_top, left_bottom, right_bottom], dtype="float32")
+    return ordered
+
+
+def extract_line_markers(contours, offset_y=0, show_result=True, draw_image=None, color=(0,255,0)):
+    """
+    공통 마커 추출 함수 예시:
+    - 사각형 형태를 가지며 일정 면적 이상인 컨투어만 마커로 간주
+    - 마커 중심점 추출
+    - show_result=True일 경우, draw_image 위에 검출된 마커 표시
+    """
+    markers = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < 50:  # 최소 면적 조건 (필요시 조정)
+            continue
+
+        x,y,w,h = cv2.boundingRect(cnt)
+        aspect_ratio = w/h if h!=0 else 9999
+        # 사각형 마커 조건: aspect ratio가 대략 0.5~2 사이
+        if 0.4 < aspect_ratio < 0.8:
+            cx = x + w/2
+            cy = y + h/2
+            markers.append((cx, cy + offset_y))
+            if show_result and draw_image is not None:
+                # 마커 위치 표시
+                cv2.rectangle(draw_image, (x, y+offset_y), (x+w, y+h+offset_y), color, 2)
+                cv2.circle(draw_image, (int(cx), int(cy+offset_y)), 5, (0,0,255), -1)
+    return markers
+
+
+def find_reference_markers_in_region(binary_image, region_box, offset_y=0, show_result=True, draw_image=None, color=(0,255,0)):
+    """
+    지정한 영역(region_box=(y_start, y_end, x_start, x_end))에서
+    마커를 찾아내는 함수 예시.
+    """
+    y_start, y_end, x_start, x_end = region_box
+    region = binary_image[y_start:y_end, x_start:x_end]
+    contours, _ = cv2.findContours(region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    markers = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < 50:
+            continue
+        x,y,w,h = cv2.boundingRect(cnt)
+        aspect_ratio = w/h if h!=0 else 9999
+        if 0.5 < aspect_ratio < 2:
+            cx = x + w/2 + x_start
+            cy = y + h/2 + y_start + offset_y
+            markers.append((cx,cy))
+            if show_result and draw_image is not None:
+                cv2.rectangle(draw_image, (x_start+x, y_start+y+offset_y), (x_start+x+w, y_start+y+h+offset_y), color, 2)
+                cv2.circle(draw_image, (int(cx), int(cy)), 5, (255,0,255), -1)
+    return markers
+
+
+def find_markers_for_omr(image, show_result=True):
+    """
+    수능 OMR 용지를 기준으로 상단/하단에 있는 검은 마커를 찾는 예시 함수.
+    상단/하단 5% 영역만 잘라 사용.
+    """
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) # 이미지를 회색조로 변환
+    height, width = gray_image.shape
+
+    # 이진화
+    _, thresh = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    print("show_result block reached!")  # 디버깅 메시지
+    if show_result:
+        cv2.namedWindow("Thresholded", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Thresholded", 800, 600)
+        cv2.imshow("Thresholded", thresh)
+        cv2.waitKey(0)
+
+    # 상단, 하단 영역 슬라이싱 (5%)
+    top_cut = 0.05
+    bottom_cut = 0.93
+    top_region = thresh[0:int(height*top_cut), :]
+    bottom_region = thresh[int(height*bottom_cut):, :]
+
+    if show_result:
+        cv2.namedWindow(f"이미지 상단 {top_cut*100}%", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(f"이미지 상단 {top_cut*100}%", 800, 200)
+        cv2.imshow(f"이미지 상단 {top_cut*100}%", top_region)
+
+        cv2.namedWindow(f"이미지 하단 {(1-bottom_cut)*100}%", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(f"이미지 하단 {(1-bottom_cut)*100}%", 800, 200)
+        cv2.imshow(f"이미지 하단 {(1-bottom_cut)*100}%", bottom_region)
+        cv2.waitKey(0)
+
+    # 상단/하단 컨투어 추출
+    top_contours, _ = cv2.findContours(top_region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    bottom_contours, _ = cv2.findContours(bottom_region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # 시각화용 이미지 복사
+    draw_image = None
+    if show_result:
+        draw_image = cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
+
+    # 상단/하단 마커 포인트
+    top_points = extract_line_markers(top_contours, offset_y=0, show_result=show_result, draw_image=draw_image)
+    bottom_points = extract_line_markers(bottom_contours, offset_y=int(height*bottom_cut), show_result=show_result, draw_image=draw_image, color=(255,0,0))
+
+    # 우측 하단 3개의 사각형 활용:
+    # 우측 하단 20%*5% 영역에서 마커를 찾아 최대 x좌표를 기준점으로 활용
+    right_region_box = (int(height*0.8), height, int(width*0.95), width)  # 하단 20%, 우측 5%
+    right_markers = find_reference_markers_in_region(
+        thresh, right_region_box,
+        offset_y=0, show_result=show_result, draw_image=draw_image, color=(0,255,255)
+    )
+
+    # right_markers 중 최대 x좌표를 찾는다.
+    if right_markers:
+        max_right_x = max(m[0] for m in right_markers)
+    else:
+        max_right_x = width  # 만약 찾지 못하면 제한하지 않음
+
+    # 마커 충분성 검증
+    if len(top_points) < 2 or len(bottom_points) < 2:
+        if show_result and draw_image is not None:
+            cv2.destroyAllWindows()
+            cv2.namedWindow("Markers Detected", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("Markers Detected", 800, 600)
+            cv2.imshow("Markers Detected", draw_image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        raise ValueError("충분한 마커를 찾지 못했습니다. 상단/하단 마커 부족.")
+
+    # 가장 왼쪽 / 오른쪽 마커 선택
+    top_left = min(top_points, key=lambda p: p[0])
+    top_right = max(top_points, key=lambda p: p[0])
+    bottom_left = min(bottom_points, key=lambda p: p[0])
+    bottom_right = max(bottom_points, key=lambda p: p[0])
+
+    # 우측 제한을 적용하여 top_right, bottom_right 보정
+    # top_right와 bottom_right의 x좌표가 max_right_x보다 크면 max_right_x로 제한
+    def adjust_point_x(pt, max_x):
+        if pt[0] > max_x:
+            return (max_x, pt[1])
+        return pt
+
+    top_right = adjust_point_x(top_right, max_right_x)
+    bottom_right = adjust_point_x(bottom_right, max_right_x)
+
+    src_points = np.array([top_left, top_right, bottom_left, bottom_right], dtype="float32")
+    src_points = order_points(src_points)
+
+    if show_result and draw_image is not None:
+        # 기준점 표시
+        for i, pt in enumerate(src_points):
+            cv2.circle(draw_image, (int(pt[0]), int(pt[1])), 10, (0,255,255), -1)
+            cv2.putText(draw_image, f"P{i+1}", (int(pt[0])+5,int(pt[1])+5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,0,255), 2)
+        
+        cv2.destroyAllWindows()
+        cv2.namedWindow("Markers Detected", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Markers Detected", 800, 600)
+        cv2.imshow("Markers Detected", draw_image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    return src_points, gray_image
+
+
+def warp_to_standard_view(image, src_points, target_size=(2800, 2000), show_result=False):
+    """
+    Perspective Transform 적용 - 가로 2800, 세로2000으로 픽셀 고정
+    
+    Args:
+        image: 입력 이미지
+        src_points: 변환할 4개의 좌표점
+        target_size: 목표 크기 (너비, 높이) - 기본값: (2800, 2000)
+        show_result: 결과 시각화 여부
+    
+    Returns:
+        warped: 변환된 이미지
+    """
+    target_width, target_height = target_size
+    
+    # 목표 좌표 설정
+    dst_points = np.array([
+        [0, 0],
+        [target_width-1, 0],
+        [0, target_height-1],
+        [target_width-1, target_height-1]
+    ], dtype="float32")
+
+    # 변환 행렬 계산 및 적용
+    M = cv2.getPerspectiveTransform(src_points, dst_points)
+    warped = cv2.warpPerspective(image, M, (target_width, target_height))
+
+    if show_result:
+        cv2.namedWindow("Warped OMR", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Warped OMR", 800, 600)
+        cv2.imshow("Warped OMR", warped)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    return warped
 
 
