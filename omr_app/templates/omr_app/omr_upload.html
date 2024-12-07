@@ -256,16 +256,22 @@
     }
     const student_id = selectedStudentRadio.value;
     const student_name = selectedStudentRadio.dataset.name;
-    const student_code = selectedStudentRadio.dataset.code;
+    const student_code = selectedStudentRadio.dataset.code || null; // student_code 없을 수 있으니 null 허용
 
     const selectedRows = getSelectedRows();
     selectedRows.forEach((tr) => {
       tr.querySelector("td:nth-child(4)").innerHTML = "매칭완료";
-      tr.querySelector("td:nth-child(5)").textContent = student_code;
+      tr.querySelector("td:nth-child(5)").textContent = student_code || "";
       tr.querySelector("td:nth-child(6)").textContent = student_name;
+
+      // omrResultsList에도 반영 (중요)
+      const idx = parseInt(tr.dataset.index);
+      window.omrResultsList[idx].is_matched = true;
+      window.omrResultsList[idx].student_id = student_id; // 추가
+      window.omrResultsList[idx].student_code = student_code;
+      window.omrResultsList[idx].student_name = student_name;
     });
 
-    // 모달 닫기
     const studentMatchModal = bootstrap.Modal.getInstance(
       document.getElementById("studentMatchModal")
     );
@@ -290,7 +296,6 @@
         return;
       }
 
-      // 테이블 데이터 수집
       const omrDataArray = [];
       document.querySelectorAll("#omrTable tbody tr").forEach((tr) => {
         const exam_date = tr.querySelector("td:nth-child(2)").textContent;
@@ -303,18 +308,18 @@
         const student_name =
           tr.querySelector("td:nth-child(6)").textContent || null;
 
-        // 실제 answers는 초기 응답에서 받았던 data.data에 존재하므로,
-        // renderOMRTable 호출 시 omrList를 전역에 저장해두거나,
-        // row.dataset.index를 통해 omrList[idx]의 answers를 다시 참조할 수 있게 해야함.
-        // 여기서는 row.dataset.index로 원본 omrData를 찾아 answers를 가져온다고 가정.
         const idx = parseInt(tr.dataset.index);
-        const originalData = window.omrResultsList[idx]; // 전역 변수로 omrResultsList를 저장했다고 가정
+        const originalData = window.omrResultsList[idx];
         const answers = originalData.answers;
+
+        // 여기서 student_id도 originalData에서 가져옴
+        const student_id = originalData.student_id || null;
 
         omrDataArray.push({
           exam_date: exam_date,
           teacher_code: teacher_code,
           is_matched: match_status,
+          student_id: student_id, // 추가
           student_code: student_code,
           student_name: student_name,
           answers: answers,
@@ -336,7 +341,7 @@
       const resData = await response.json();
       if (resData.status === "success") {
         alert("최종 제출 완료!");
-        window.location.href = "{% url 'omr_app:omr_result_list' %}";
+        window.location.href = resData.redirect_url;
       } else {
         alert("오류 발생: " + resData.message);
       }

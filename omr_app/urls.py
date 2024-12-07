@@ -19,4 +19,9 @@ urlpatterns = [
     path('omr/analyze/', views.omr_process, name='omr_process'),
     path('omr/finalize/', views.finalize, name='finalize'),
     path('omr/<int:result_id>/', views.omr_result_detail, name='omr_result_detail'),
+    
+    # 시험별 답안지 리스트 페이지
+    path('omr/answer-sheets/', views.omr_answer_sheet_list, name='omr_answer_sheet_list'),
+    # 시험별 답안지 상세 페이지
+    path('omr/answer-sheets/<str:exam_identifier>/', views.omr_result_grouped_detail, name='omr_result_detail_grouped'),
 ] 

@@ -1,0 +1,35 @@
+{% extends 'base.html' %} {% block content %}
+<h2>OMR 답안지 목록</h2>
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th><input type="checkbox" id="selectAll" /></th>
+      <th>exam_identifier</th>
+      <th>temp_exam_name</th>
+      <th>응시인원</th>
+      <th>문제지 매칭 여부</th>
+      <th>작업</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for group in grouped_results %}
+    <tr>
+      <td><input type="checkbox" class="rowCheck" /></td>
+      <td>{{ group.exam_identifier }}</td>
+      <td>{{ group.temp_exam_name }}</td>
+      <td>{{ group.num_attendees }}</td>
+      <td>{{ group.exam_sheet_matched|yesno:"매칭됨,미매칭" }}</td>
+      <td>
+        <!-- 상세보기 버튼: exam_identifier를 파라미터로 넘겨 omr_result_list로 이동 -->
+        <a
+          href="{% url 'omr_app:omr_result_detail_grouped' group.exam_identifier %}"
+          class="btn btn-info btn-sm"
+          >상세보기</a
+        >
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

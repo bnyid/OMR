@@ -2,8 +2,9 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.urls import reverse
 from .models import OMRResult, Student
-from django.db.models import Q
+from django.db.models import Q, Count, Max
 
 
 from .services.omr_service import process_pdf_and_extract_omr, extract_omr_data_from_image
@@ -18,6 +19,37 @@ from pdf2image import convert_from_bytes
 from django.views.decorators.http import require_POST
 import json
 
+## 시험별 답안지 상세 페이지
+def omr_result_grouped_detail(request, exam_identifier):
+    # exam_identifier를 키로 OMRResult들 가져오기
+    results = OMRResult.objects.filter(exam_identifier=exam_identifier).order_by('-created_at')
+    return render(request, 'omr_app/omr_result_grouped_detail.html', {
+        'exam_identifier': exam_identifier,
+        'results': results
+    })
+
+
+
+## 시험별 답안지 리스트 페이지
+def omr_answer_sheet_list(request):
+    # OMRResult를 exam_identifier, temp_exam_name으로 그룹화
+    # annotate를 통해 해당 그룹 내 OMRResult 수(num_attendees)와 가장 최근 생성일(latest_created_at) 추출
+    grouped_results = (
+        OMRResult.objects
+        .values('exam_identifier', 'temp_exam_name')
+        .annotate(
+            num_attendees=Count('id'),
+            exam_sheet_matched=Max('exam_sheet_matched'), # 그룹 내 어느 한 레코드(최대값)로 표시 - 모두 동일하다고 가정
+            latest_created_at=Max('created_at')
+        )
+        .order_by('-latest_created_at')  # 가장 최근 생성일이 위로
+    )
+
+    return render(request, 'omr_app/omr_answer_sheet_list.html', {
+        'grouped_results': grouped_results
+    })
+
+
 
 @require_POST
 def finalize(request):
@@ -29,21 +61,35 @@ def finalize(request):
         exam_date_str = omr['exam_date'] # 'YYYY-MM-DD'
         teacher_code = omr['teacher_code']
         is_matched = omr['is_matched']
+        student_id = omr['student_id']
         student_code = omr['student_code']
         student_name = omr['student_name']
         answers = omr['answers']
 
         exam_date = datetime.strptime(exam_date_str, "%Y-%m-%d").date()
 
-        # Student 매칭
+        # Student 매칭 로직 강화
         student = None
-        if is_matched and student_code:
-            try:
-                student = Student.objects.get(student_code=student_code)
-            except Student.DoesNotExist:
-                # 매칭 안되면 unmatched로 처리
-                is_matched = False
+        if is_matched:
+            if student_id:
+                # 수동매치된 경우 먼저 처리 (Student_id로 매칭)
+                student = Student.objects.get(id=student_id)
+            elif student_code:
+                # 자동매치 처리 : student_code 매칭 시도
+                try:
+                    student = Student.objects.get(student_code=student_code)
+                except Student.DoesNotExist:
+                    return JsonResponse({
+                        'status': 'error', 
+                        'message': f'학생DB에 없는 student_code가 omr에 입력되었습니다. {student_name}학생을 수동매칭 후 다시 시도하세요.'
+                    }, status=400)
 
+        else:
+            return JsonResponse({
+                'status': 'error', 
+                'message': '학생과 매치되지 않은 omr이 있습니다. 매칭 후 다시 시도하세요.'
+            }, status=400)
+                
         OMRResult.objects.create(
             exam_date=exam_date,
             teacher_code=teacher_code,
@@ -55,8 +101,7 @@ def finalize(request):
             temp_exam_name=temp_exam_name
         )
 
-    return JsonResponse({'status':'success'})
-
+    return JsonResponse({'status':'success', 'redirect_url': reverse('omr_app:omr_answer_sheet_list')})
 
 
 from django.db.models import Q
@@ -83,6 +128,7 @@ def show_omr_upload_page(request):
 @csrf_exempt
 def omr_process(request):
     if request.method == 'POST' and request.FILES.get('file'):
+        print("omr_process 호출됨")
         uploaded_file = request.FILES['file']
         file_name = uploaded_file.name.lower() # 파일 확장자나 Content_Type으로 PDF vs Image 판별
 

@@ -1,0 +1,27 @@
+{% extends 'base.html' %} {% block content %}
+<h2>OMR 결과 상세 ({{ exam_identifier }})</h2>
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>시험 날짜</th>
+      <th>학생</th>
+      <th>매칭 여부</th>
+      <th>생성 일시</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for result in results %}
+    <tr>
+      <td>{{ result.exam_date }}</td>
+      <td>
+        {% if result.student %} {{ result.student.name }} {% else %} {{
+        result.unmatched_student_name }} {% endif %}
+      </td>
+      <td>{{ result.is_matched|yesno:"매칭완료,미매칭" }}</td>
+      <td>{{ result.created_at|date:"Y-m-d H:i" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
