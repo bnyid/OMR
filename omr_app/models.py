@@ -224,10 +224,9 @@ class ExamSheetQuestionMapping(models.Model):
 ## OMR 결과 모델 ##
 class OMRResult(models.Model):
     exam_date = models.DateField('시험 날짜')
-    exam_order = models.CharField('시험 순번', max_length=2)  # '01', '02', ... 형태로 저장
-    exam_identifier = models.CharField('시험식별자', max_length=8, null=True, blank=True, unique=True)  
-    # exam_date와 exam_order 결합 후 save()에서 자동 설정할 수 있음
-    
+    teacher_code = models.CharField('강사코드', max_length=2)  # '01', '02', ... 형태로 저장
+    exam_identifier = models.CharField('시험식별자', max_length=8, null=True, blank=True)  
+    # exam_date와 teacher_code 결합 후 save()에서 자동 설정할 수 있음
     
     student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True)
     is_matched = models.BooleanField('매칭 여부', default=False)
@@ -251,7 +250,7 @@ class OMRResult(models.Model):
         m = str(self.exam_date.month).zfill(2)
         d = str(self.exam_date.day).zfill(2)
         # exam_order는 이미 '01', '02' 이런 식으로 저장한다고 가정
-        self.exam_identifier = f"{y}{m}{d}{self.exam_order}"
+        self.exam_identifier = f"{y}{m}{d}{self.teacher_code}"
         super().save(*args, **kwargs)
 
     def __str__(self):

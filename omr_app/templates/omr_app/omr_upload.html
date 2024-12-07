@@ -148,7 +148,7 @@
       row.innerHTML = `
         <td><input type="checkbox" class="rowCheck"></td>
         <td>${omr.exam_date}</td>
-        <td>${omr.exam_order}</td>
+        <td>${omr.teacher_code}</td>
         <td>${matchStatus}</td>
         <td>${omr.student_code || ""}</td>
         <td>${omr.student_name || ""}</td>
@@ -294,7 +294,7 @@
       const omrDataArray = [];
       document.querySelectorAll("#omrTable tbody tr").forEach((tr) => {
         const exam_date = tr.querySelector("td:nth-child(2)").textContent;
-        const exam_order = tr.querySelector("td:nth-child(3)").textContent;
+        const teacher_code = tr.querySelector("td:nth-child(3)").textContent;
         const match_status = tr
           .querySelector("td:nth-child(4)")
           .textContent.includes("매칭완료");
@@ -313,7 +313,7 @@
 
         omrDataArray.push({
           exam_date: exam_date,
-          exam_order: exam_order,
+          teacher_code: teacher_code,
           is_matched: match_status,
           student_code: student_code,
           student_name: student_name,

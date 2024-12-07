@@ -9,7 +9,7 @@ from django.db.models import Q
 from .services.omr_service import process_pdf_and_extract_omr, extract_omr_data_from_image
 from .services.student_service import update_students, generate_registration_number, create_student
 
-
+from datetime import datetime
 from django.views.decorators.http import require_POST
 from django.db.models import F, Value, DateField
 from django.db.models.functions import Coalesce
@@ -27,7 +27,7 @@ def finalize(request):
 
     for omr in omr_list:
         exam_date_str = omr['exam_date'] # 'YYYY-MM-DD'
-        exam_order = omr['exam_order']
+        teacher_code = omr['teacher_code']
         is_matched = omr['is_matched']
         student_code = omr['student_code']
         student_name = omr['student_name']
@@ -46,7 +46,7 @@ def finalize(request):
 
         OMRResult.objects.create(
             exam_date=exam_date,
-            exam_order=exam_order,
+            teacher_code=teacher_code,
             student=student if is_matched else None,
             is_matched=is_matched,
             unmatched_student_code=None if is_matched else student_code,
@@ -84,21 +84,21 @@ def show_omr_upload_page(request):
 def omr_process(request):
     if request.method == 'POST' and request.FILES.get('file'):
         uploaded_file = request.FILES['file']
-        
-        
-        # 파일 확장자나 Content_Type으로 PDF vs Image 판별
-        file_name = uploaded_file.name.lower()
-        
-        if file_name.endswith('.pdf'):
-            # PDF -> 여러 페이지 처리
+        file_name = uploaded_file.name.lower() # 파일 확장자나 Content_Type으로 PDF vs Image 판별
+
+        if file_name.endswith('.pdf'):  # PDF -> 여러 페이지가 포함될 수 있어 다르게 처리
             omr_results = process_pdf_and_extract_omr(uploaded_file)
-             # omr_results는 [{exam_date, exam_order, student_code, student_name, answers}, ...] 형태의 리스트
-        else:
-            # 이미지 단일 처리
-            # 단일 이미지일 경우 기존 함수와 동일하게 처리
-            # extract_omr_Data_from_image 호출
+        else: # 이미지 단일 처리
             omr_data = extract_omr_data_from_image(uploaded_file)
             omr_results = [omr_data]
+            
+        # 각 omr에 대해 student_code 매칭 여부 판단.
+        for omr in omr_results:
+            student_code = omr.get('student_code')  
+            if student_code: # student_code가 있는 경우
+                if Student.objects.filter(student_code=student_code).exists(): # DB 조회 성공시
+                    omr['is_matched'] = True
+        
         return JsonResponse({
             'status': 'success',
             'data': omr_results # 리스트 형태로 반환
@@ -111,25 +111,25 @@ def omr_process(request):
 
 
 def omr_result_list(request):
-    results = OMRResult.objects.all().order_by('-exam_date', 'class_code', 'student_id')
+    results = OMRResult.objects.all().order_by('-exam_date', 'teacher_code', 'student_id')
     
     # 사용자가 페이지에 그냥 접속만 했을 경우에는 request.GET ={}로 비어 있고, 아래 3개 변수는 None으로 설정됨
     exam_date = request.GET.get('exam_date')  
-    class_code = request.GET.get('class_code')
+    teacher_code = request.GET.get('teacher_code')
     student_name = request.GET.get('student_name')
     
     # 사용자가 검색 조건을 입력하고 검색 버튼을 눌렀을 경우에는 request.GET에 검색 조건이 담겨 있고, 아래 3개 변수는 검색 조건에 해당하는 값으로 설정됨
     if exam_date:
         results = results.filter(exam_date=exam_date)
-    if class_code:
-        results = results.filter(class_code=class_code)
+    if teacher_code:
+        results = results.filter(teacher_code=teacher_code)
     if student_name:
         results = results.filter(student_name__icontains=student_name)
     
     return render(request, 'omr_app/omr_result_list.html', {
         'results': results, # 전체 df를 테이블에 표시하기 위함
         'exam_dates': OMRResult.objects.dates('exam_date', 'day', order='DESC'), 
-        'class_codes': OMRResult.objects.values_list('class_code', flat=True).distinct() # exam_dates와 class_code는 필터링 드롭다운 option 값으로 사용됨
+        'teacher_codes': OMRResult.objects.values_list('teacher_code', flat=True).distinct() # exam_dates와 teacher_code는 필터링 드롭다운 option 값으로 사용됨
     })
 
 def omr_result_detail(request, result_id):

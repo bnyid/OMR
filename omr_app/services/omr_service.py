@@ -27,7 +27,7 @@ def process_pdf_and_extract_omr(file):
         각 페이지별 OMR 처리 결과를 담은 딕셔너리의 리스트.
         각 딕셔너리는 다음과 같은 키를 포함한다.
         - exam_date (str): 'YYYY-MM-DD' 형식의 시험 날짜
-        - exam_order (str): '01', '02' 형태의 시험 순번
+        - teacher_code (str): '01', '02' 형태의 시험 순번
         - student_code (str): 추출된 학생 코드 (학번)
         - student_name (str): 추출된 학생 이름
         - answers (list): 각 문항별로 {'문항': int, '답': str} 형태의 딕셔너리를 담은 리스트
@@ -53,14 +53,14 @@ def process_pdf_and_extract_omr(file):
     [
         {
             'exam_date': '2024-03-15',
-            'exam_order': '01',
+            'teacher_code': '01',
             'student_code': '20240001',
             'student_name': '홍길동',
             'answers': [{'문항': 1, '답': '2'}, {'문항': 2, '답': '5'}, ...]
         },
         {
             'exam_date': '2024-03-15',
-            'exam_order': '01',
+            'teacher_code': '01',
             'student_code': '20240002',
             'student_name': '김철수',
             'answers': [{'문항': 1, '답': '3'}, {'문항': 2, '답': '1'}, ...]
@@ -109,7 +109,7 @@ def extract_omr_data_from_image(image):
     dict
         다음과 같은 열을 포함하는 딕셔너리:
         - 시행일 (str): 시험 시행일 6자리 (예: '240315')
-        - 반코드 (str): 2자리 반 코드 (예: '01')
+        - 강사코드 (str): 2자리 반 코드 (예: '01')
         - 학번 (str): 8자리 학번
         - 이름 (str): 학생 이름 (한글)
         - 문항 (int): 문항 번호 (1부터 시작)
@@ -123,7 +123,7 @@ def extract_omr_data_from_image(image):
 
     Notes
     -----
-    - 시행일은 앞 6자리, 반코드는 뒤 2자리로 구성
+    - 시행일은 앞 6자리, 강사코드는 뒤 2자리로 구성
     - 답안이 마킹되지 않은 경우 'X'로 표시
     - 각 문항별로 별도의 행으로 구성됨
     - 반환되는 DataFrame은 문항 순서대로 정렬되어 있음
@@ -133,7 +133,7 @@ def extract_omr_data_from_image(image):
     >>> image = cv2.imread('omr_sample.jpg')
     >>> df = process_omr_image(image)
     >>> print(df.head())
-       시행일  반코드     학번   이름  문항  답
+       시행일  강사코드     학번   이름  문항  답
     0  240315   01  20240001  홍길동    1   2
     1  240315   01  20240001  홍길동    2   5
     2  240315   01  20240001  홍길동    3   1
@@ -157,15 +157,15 @@ def extract_omr_data_from_image(image):
         raise ValueError(f"필요한 영역을 찾을 수 없습니다. (발견된 영역: {len(contours)}개, 필요한 영역: 5개)")
     
     
-    # 시행일+반코드 처리
-    date_class_area = get_omr_area_image(contours[0], warped_image, show_result=False)
-    date_class_marking_area = extract_marking_area(date_class_area, 
+    # 시행일+강사코드 처리
+    date_teacher_area = get_omr_area_image(contours[0], warped_image, show_result=False)
+    date_teacher_marking_area = extract_marking_area(date_teacher_area, 
                                         skip_x=(False, 0, 0, 0),
                                         skip_y=(True, 150, 40000, 8000),
                                         show_result=False)
-    date_class_marking_result = analyze_omr_grid(date_class_marking_area,
+    date_teacher_marking_result = analyze_omr_grid(date_teacher_marking_area,
                             start_point=(0,1),
-                            rows=10, cols=8,  # 8자리 (시행일 6자 + 반코드 2자)
+                            rows=10, cols=8,  # 8자리 (시행일 6자 + 강사코드 2자)
                             cell_size=(85.2, 53.8),
                             first_row_height=55,
                             first_row_gap=15,
@@ -173,9 +173,9 @@ def extract_omr_data_from_image(image):
                             threshold=0.3,
                             show_result=False)
     
-    date_class_number = convert_marking_to_number(date_class_marking_result, read_by_column=True)
-    exam_date_6 = date_class_number[:6]  # 앞 6자리는 시행일
-    class_code_2 = date_class_number[6:]  # 뒤 2자리는 반코드
+    date_teacher_number = convert_marking_to_number(date_teacher_marking_result, read_by_column=True)
+    exam_date = date_teacher_number[:6]  # 앞 6자리는 시행일
+    teacher_code = date_teacher_number[6:]  # 뒤 2자리는 강사코드
     
     # 학번 영역 처리
     id_area = get_omr_area_image(contours[1], warped_image, show_result=False)
@@ -242,9 +242,9 @@ def extract_omr_data_from_image(image):
     # exam_date 필드는 YYYY-MM-DD 형태로 변환해야 할 수도 있음.
     # 현재 exam_date_6는 YYMMDD 형태.
     # 여기서는 20YY-MM-DD로 가정(2000년대만 처리한다고 가정)
-    year = "20" + exam_date_6[:2]
-    month = exam_date_6[2:4]
-    day = exam_date_6[4:6]
+    year = "20" + exam_date[:2]
+    month = exam_date[2:4]
+    day = exam_date[4:6]
     exam_date_str = f"{year}-{month}-{day}"
     
     # answers를 JSON 형태로 변환
@@ -258,7 +258,7 @@ def extract_omr_data_from_image(image):
     # 반환할 딕셔너리 구성
     result_data = {
         'exam_date': exam_date_str, # YYYY-MM-DD 형식 문자열
-        'class_code': class_code_2, # '01', '02' 등 2자리 문자열
+        'teacher_code': teacher_code, # '01', '02' 등 2자리 문자열
         'student_code': student_code,
         'student_name': student_name,
         'answers': answers_list,
@@ -267,8 +267,8 @@ def extract_omr_data_from_image(image):
 
     # 6개 열을 가진 df 생성
     result_df = pd.DataFrame({
-        '시행일': exam_date_6,
-        '반코드': class_code_2,
+        '시행일': exam_date,
+        '강사코드': teacher_code,
         '학번': student_code,
         '이름': student_name,
         '문항': question_numbers,
