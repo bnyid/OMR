@@ -147,10 +147,10 @@ def extract_omr_data_from_image(image):
         
         # 이미지 전처리
         
-    markers, gray_image = find_markers_for_omr(image,show_result=True)
-    warped_image = warp_to_standard_view(gray_image,markers, show_result=True)
+    markers, gray_image = find_markers_for_omr(image,show_result=False)
+    warped_image = warp_to_standard_view(gray_image,markers, show_result=False)
     
-    contours = get_coordinates_from_large_contours(warped_image, 200000, show_result=True)
+    contours = get_coordinates_from_large_contours(warped_image, 200000, show_result=False)
 
     # contours 개수 검증
     if len(contours) < 5:  # 필요한 최소 contour 개수를 5개로 수정

@@ -639,7 +639,7 @@ def order_points(pts):
     return ordered
 
 
-def extract_line_markers(contours, offset_y=0, show_result=True, draw_image=None, color=(0,255,0)):
+def extract_line_markers(contours, offset_y=0, show_result=False, draw_image=None, color=(0,255,0)):
     """
     공통 마커 추출 함수 예시:
     - 사각형 형태를 가지며 일정 면적 이상인 컨투어만 마커로 간주
@@ -666,7 +666,7 @@ def extract_line_markers(contours, offset_y=0, show_result=True, draw_image=None
     return markers
 
 
-def find_reference_markers_in_region(binary_image, region_box, offset_y=0, show_result=True, draw_image=None, color=(0,255,0)):
+def find_reference_markers_in_region(binary_image, region_box, offset_y=0, show_result=False, draw_image=None, color=(0,255,0)):
     """
     지정한 영역(region_box=(y_start, y_end, x_start, x_end))에서
     마커를 찾아내는 함수 예시.
@@ -691,7 +691,7 @@ def find_reference_markers_in_region(binary_image, region_box, offset_y=0, show_
     return markers
 
 
-def find_markers_for_omr(image, show_result=True):
+def find_markers_for_omr(image, show_result=False):
     """
     수능 OMR 용지를 기준으로 상단/하단에 있는 검은 마커를 찾는 예시 함수.
     상단/하단 5% 영역만 잘라 사용.
@@ -702,11 +702,10 @@ def find_markers_for_omr(image, show_result=True):
     # 이진화
     _, thresh = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     
-    print("show_result block reached!")  # 디버깅 메시지
     if show_result:
-        cv2.namedWindow("Thresholded", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Thresholded", 800, 600)
-        cv2.imshow("Thresholded", thresh)
+        cv2.namedWindow("마커찾는_이진화이미지", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("마커찾는_이진화이미지", 800, 600)
+        cv2.imshow("마커찾는_이진화이미지", thresh)
         cv2.waitKey(0)
 
     # 상단, 하단 영역 슬라이싱 (5%)
@@ -716,13 +715,13 @@ def find_markers_for_omr(image, show_result=True):
     bottom_region = thresh[int(height*bottom_cut):, :]
 
     if show_result:
-        cv2.namedWindow(f"이미지 상단 {top_cut*100}%", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(f"이미지 상단 {top_cut*100}%", 800, 200)
-        cv2.imshow(f"이미지 상단 {top_cut*100}%", top_region)
+        cv2.namedWindow(f"이미지_상단_{top_cut*100}%", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(f"이미지_상단_{top_cut*100}%", 800, 200)
+        cv2.imshow(f"이미지_상단_{top_cut*100}%", top_region)
 
-        cv2.namedWindow(f"이미지 하단 {(1-bottom_cut)*100}%", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(f"이미지 하단 {(1-bottom_cut)*100}%", 800, 200)
-        cv2.imshow(f"이미지 하단 {(1-bottom_cut)*100}%", bottom_region)
+        cv2.namedWindow(f"이미지_하단_{(1-bottom_cut)*100}%", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(f"이미지_하단_{(1-bottom_cut)*100}%", 800, 200)
+        cv2.imshow(f"이미지_하단_{(1-bottom_cut)*100}%", bottom_region)
         cv2.waitKey(0)
 
     # 상단/하단 컨투어 추출
