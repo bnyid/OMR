@@ -53,7 +53,7 @@ def omr_answer_sheet_list(request):
 
 @require_POST
 def finalize(request):
-    data = json.loads(request.body)
+    data = json.loads(request.body) # json 형태의 데이터를 파이썬 딕셔너리로 변환
     temp_exam_name = data.get('temp_exam_name')
     omr_list = data.get('omr_data', [])
 
@@ -61,21 +61,20 @@ def finalize(request):
         exam_date_str = omr['exam_date'] # 'YYYY-MM-DD'
         teacher_code = omr['teacher_code']
         is_matched = omr['is_matched']
-        student_id = omr['student_id']
         student_code = omr['student_code']
         student_name = omr['student_name']
         answers = omr['answers']
-
         exam_date = datetime.strptime(exam_date_str, "%Y-%m-%d").date()
 
-        # Student 매칭 로직 강화
+        # Student FK 매칭
+        student_id = omr['student_id']
         student = None
         if is_matched:
             if student_id:
                 # 수동매치된 경우 먼저 처리 (Student_id로 매칭)
                 student = Student.objects.get(id=student_id)
             elif student_code:
-                # 자동매치 처리 : student_code 매칭 시도
+                # 자동매치 처리 : student_code 매칭 (omr_process 에서 자동매치된 경우 student_id가 없음)
                 try:
                     student = Student.objects.get(student_code=student_code)
                 except Student.DoesNotExist:
@@ -94,9 +93,9 @@ def finalize(request):
             exam_date=exam_date,
             teacher_code=teacher_code,
             student=student if is_matched else None,
-            is_matched=is_matched,
-            unmatched_student_code=None if is_matched else student_code,
-            unmatched_student_name=None if is_matched else student_name,
+            is_matched=is_matched, # 여기까지 왔다면 is_matched는 항상 True
+            unmatched_student_code=None,
+            unmatched_student_name=None,
             answers=answers,
             temp_exam_name=temp_exam_name
         )
