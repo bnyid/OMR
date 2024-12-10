@@ -45,18 +45,25 @@ def generate_registration_number(reg_date, exclude_id=None):
     return registration_number
 
 
-def update_students(student_ids, class_name=None, school_name=None, grade=None):
-    update_fields = {}
-    if class_name:
-        update_fields['class_name'] = class_name
-    if school_name:
-        update_fields['school_name'] = school_name
-    if grade:
-        update_fields['grade'] = grade
-
-    if update_fields:
-        return Student.objects.filter(id__in=student_ids).update(**update_fields) # **=딕셔너리언패킹 / Django의 QuerySet.update() 메서드는 업데이트된 행(row)의 개수를 정수(int)로 반환
-    return 0
+def update_students(selected_students, new_class_name, new_school_name, new_grade):
+    queryset = Student.objects.filter(id__in=selected_students)
+    # update()로 일괄 수정
+    updates = {}
+    if new_class_name:
+        updates['class_name'] = new_class_name
+    if new_school_name:
+        updates['school_name'] = new_school_name
+    if new_grade:
+        updates['grade'] = new_grade
+    
+    if updates:
+        queryset.update(**updates)
+        # 여기서 다시 queryset 가져와 save 호출
+        for student in queryset:
+            student.save()
+        return queryset.count()
+    else:
+        return 0
 
 
 

@@ -116,6 +116,7 @@ def student_search(request):
             'id': st.id,
             'student_code': st.student_code,
             'name': st.name,
+            'class_name_by_school': st.class_name_by_school,
             'class_name': st.class_name,
         })
     return JsonResponse(data, safe=False)

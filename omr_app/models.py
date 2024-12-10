@@ -17,7 +17,10 @@ class Student(models.Model):
     registration_number = models.CharField('등록번호', max_length=11, null=True, blank=True)
     registered_date = models.DateField(null=True, blank=True)
     name = models.CharField('이름', max_length=10)
+    
+    class_name_by_school = models.CharField('내신반', max_length=50, null=True, blank=True)
     class_name = models.CharField('소속반', max_length=20, null=True, blank=True)
+
     school_type = models.CharField('중/고등 구분', max_length=1, choices=SCHOOL_TYPE_CHOICES, null=True, blank=True)
     school_name = models.CharField('학교명', max_length=30, null=True, blank=True)
     grade = models.IntegerField('학년', choices=GRADE_CHOICES, null=True, blank=True)
@@ -28,6 +31,14 @@ class Student(models.Model):
     class Meta:
         verbose_name = '학생'
         verbose_name_plural = '학생들'
+        
+    def save(self, *args, **kwargs):
+        # school_name과 grade가 모두 있을 때만 class_name_by_school 생성
+        if self.school_name and self.grade:
+            self.class_name_by_school = f"{self.school_name}{self.grade}"
+        else:
+            self.class_name_by_school = None
+        super().save(*args, **kwargs)   
         
     def __str__(self):
         return f"[{self.id} {self.student_code}] {self.name} ({self.class_name})"
@@ -238,7 +249,8 @@ class OMRResult(models.Model):
     answers = models.JSONField('답안 결과')
     created_at = models.DateTimeField('생성일', auto_now_add=True)
     
-    temp_exam_name = models.CharField('임시 시험명', max_length=50, null=True, blank=True)
+    class_name = models.CharField('반이름', max_length=20, null=True, blank=True)
+    exam_name = models.CharField('시험명', max_length=50, null=True, blank=True)
     
     class Meta:
         verbose_name = 'OMR 결과'

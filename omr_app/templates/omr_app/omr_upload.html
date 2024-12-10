@@ -100,12 +100,24 @@
         ></button>
       </div>
       <div class="modal-body">
-        <input
-          type="text"
-          id="tempExamNameInput"
-          placeholder="임시 시험명 입력(문제지 매칭 전까지 사용)"
-          class="form-control"
-        />
+        <div class="mb-3">
+          <label for="classNameInput" class="form-label">소속반</label>
+          <input
+            type="text"
+            id="classNameInput"
+            placeholder="소속반 입력"
+            class="form-control"
+          />
+        </div>
+        <div class="mb-3">
+          <label for="examNameInput" class="form-label">시험명</label>
+          <input
+            type="text"
+            id="examNameInput"
+            placeholder="시험명 입력"
+            class="form-control"
+          />
+        </div>
       </div>
       <div class="modal-footer">
         <button id="finalConfirmBtn" class="btn btn-success">제출</button>
@@ -313,15 +325,18 @@
   document
     .getElementById("finalConfirmBtn")
     .addEventListener("click", async () => {
-      const tempExamName = document
-        .getElementById("tempExamNameInput")
-        .value.trim();
-      if (!tempExamName) {
+      const className = document.getElementById("classNameInput").value.trim();
+      const examName = document.getElementById("examNameInput").value.trim();
+
+      if (!className) {
+        alert("소속반을 입력하세요.");
+        return;
+      }
+      if (!examName) {
         alert("시험명을 입력하세요.");
         return;
       }
 
-      // window.omrResultsList 전역 변수의 정보를 배열로 변환
       const omrDataArray = window.omrResultsList.map((data) => ({
         exam_date: data.exam_date,
         teacher_code: data.teacher_code,
@@ -339,7 +354,8 @@
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          temp_exam_name: tempExamName,
+          class_name: className,
+          exam_name: examName,
           omr_data: omrDataArray,
         }),
       });

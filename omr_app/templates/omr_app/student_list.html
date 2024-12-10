@@ -176,6 +176,7 @@
             <th>등록번호</th>
             <th>학번</th>
             <th>이름</th>
+            <th>내신반</th>
             <th>소속반</th>
             <th>학교명</th>
             <th>학년</th>
@@ -204,6 +205,9 @@
             </td>
             <td class="editable" data-field="name">
               {{ student.name|default:'-' }}
+            </td>
+            <td class="editable" data-field="class_name_by_school">
+              {{ student.class_name_by_school|default:'-' }}
             </td>
             <td class="editable" data-field="class_name">
               {{ student.class_name|default:'-' }}
@@ -281,27 +285,33 @@
       },
       columnDefs: [
         { targets: [4], searchable: true }, // 이름 열 (4는 4번째 열을 의미)
-        { targets: [5], searchable: true }, // 소속반 열
-        { targets: [6], searchable: true }, // 학교 열
-        { targets: [7], searchable: true }, // 학년 열
+        { targets: [5], searchable: true }, // 내신반 열
+        { targets: [6], searchable: true }, // 소속반 열
+        { targets: [7], searchable: true }, // 학교 열
+        { targets: [8], searchable: true }, // 학년 열
         { targets: "_all", searchable: false }, // _all은 모든 열을 의미하는데, 위에 설정한 열을 제외한 나머지 열은 검색 불가능하게 만들어, 효율성,속도를 향상시킴.
       ],
+    });
+
+    // 내신반 필터 적용
+    $("#class_name_by_schoolFilter").on("change", function () {
+      table.column(5).search(this.value).draw();
     });
 
     // 소속반 필터 적용
     $("#classFilter").on("change", function () {
       // id가 classFilter인 요소의 change이벤트가 발생시, 해당 이벤트 객체를 매개변수로 받아 {}안에 있는 function들을 실행한다.
-      table.column(5).search(this.value).draw(); // table객체에 대해 5번째 열(소속반)에 대해 this.value값(해당 태그 안의 option value값)을 검색하고 테이블을 다시 그림draw().
+      table.column(6).search(this.value).draw(); // table객체에 대해 5번째 열(소속반)에 대해 this.value값(해당 태그 안의 option value값)을 검색하고 테이블을 다시 그림draw().
     });
 
     // 학교 필터 적용
     $("#schoolFilter").on("change", function () {
-      table.column(6).search(this.value).draw();
+      table.column(7).search(this.value).draw();
     });
 
     // 학년 필터 적용
     $("#gradeFilter").on("change", function () {
-      table.column(7).search(this.value).draw();
+      table.column(8).search(this.value).draw();
     });
 
     // 이름 검색
@@ -339,6 +349,7 @@
                 <td></td>
                 <td><input type="text" class="form-control form-control-sm" name="student_code" maxlength="8"></td>
                 <td><input type="text" class="form-control form-control-sm" name="name" maxlength="10" required></td>
+                <td><input type="text" class="form-control form-control-sm" name="class_name_by_school"></td>
                 <td><input type="text" class="form-control form-control-sm" name="class_name"></td>
                 <td><input type="text" class="form-control form-control-sm" name="school_name"></td>
                 <td>
