@@ -32,12 +32,46 @@ class Student(models.Model):
         verbose_name = '학생'
         verbose_name_plural = '학생들'
         
+    @classmethod
+    def generate_registration_number(cls, reg_date, exclude_id=None):
+        """
+        Model 내부에서 사용하기 위한 등록번호 생성 메서드.
+        """
+        students = cls.objects.filter(registered_date=reg_date)
+        if exclude_id:
+            students = students.exclude(id=exclude_id)
+
+        date_str = reg_date.strftime("%y%m%d")  # datetime.date 객체를 YYMMDD 포맷 문자열로 변환
+
+        existing_numbers = [] # 이미 등록번호가 존재하는 학생들의 해당일자 등록번호 중 뒷자리 숫자들(_XX 에서 XX) 모아놓은 리스트
+        for s in students:
+            if s.registration_number and '_' in s.registration_number:
+                num_str = s.registration_number.split('_')[1]
+                try:
+                    existing_numbers.append(int(num_str))
+                except ValueError:
+                    pass
+
+        if existing_numbers: # 존재하는 등록번호중 최대값을 구하고 +1을 해서 다음 등록번호를 생성
+            max_num = max(existing_numbers)
+            next_num = max_num + 1
+        else:
+            next_num = 1
+
+        return f"{date_str}_{str(next_num).zfill(2)}"
+        
+        
     def save(self, *args, **kwargs):
         # school_name과 grade가 모두 있을 때만 class_name_by_school 생성
         if self.school_name and self.grade:
             self.class_name_by_school = f"{self.school_name}{self.grade}"
         else:
             self.class_name_by_school = None
+        
+        # 등록번호가 비어있고 registered_date가 있다면 자동 생성
+        if self.registered_date and not self.registration_number:
+            self.registration_number = self.generate_registration_number(self.registered_date, exclude_id=self.id)
+
         super().save(*args, **kwargs)   
         
     def __str__(self):

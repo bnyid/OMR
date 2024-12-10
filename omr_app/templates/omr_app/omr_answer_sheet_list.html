@@ -1,4 +1,4 @@
-<!-- 답안지 목록 -->
+<!-- omr_answer_sheet_list.html -->
 {% extends 'base.html' %} {% block content %}
 <h2>OMR 답안지 목록</h2>
 
@@ -7,7 +7,7 @@
     <tr>
       <th><input type="checkbox" id="selectAll" /></th>
       <th>exam_identifier</th>
-      <th>temp_exam_name</th>
+      <th>시험명</th>
       <th>응시인원</th>
       <th>문제지 매칭 여부</th>
       <th>작업</th>
@@ -18,7 +18,7 @@
     <tr>
       <td><input type="checkbox" class="rowCheck" /></td>
       <td>{{ group.exam_identifier }}</td>
-      <td>{{ group.temp_exam_name }}</td>
+      <td>{{ group.exam_name }}</td>
       <td>{{ group.num_attendees }}</td>
       <td>{{ group.exam_sheet_matched|yesno:"매칭됨,미매칭" }}</td>
       <td>

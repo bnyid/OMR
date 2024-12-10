@@ -1,10 +1,9 @@
 from .omr_service import extract_omr_data_from_image
-from .student_service import update_students, generate_registration_number
+from .student_service import update_students    
 
 __all__ = [
     'extract_omr_data_from_image',
     'update_students',
-    'generate_registration_number',
 ]
 
 

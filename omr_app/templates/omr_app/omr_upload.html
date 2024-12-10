@@ -120,6 +120,9 @@
         </div>
       </div>
       <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          취소
+        </button>
         <button id="finalConfirmBtn" class="btn btn-success">제출</button>
       </div>
     </div>
@@ -219,7 +222,7 @@
 
     // index가 null값인 것을 제거하고 배열 정리
     window.omrResultsList = window.omrResultsList.filter(
-      (_, idx) => idx !== null
+      (element) => element !== null
     );
 
     selectedRows.forEach((tr) => tr.remove());

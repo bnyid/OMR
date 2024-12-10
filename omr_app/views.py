@@ -8,7 +8,7 @@ from django.db.models import Q, Count, Max
 
 
 from .services.omr_service import process_pdf_and_extract_omr, extract_omr_data_from_image
-from .services.student_service import update_students, generate_registration_number, create_student
+from .services.student_service import update_students
 
 from datetime import datetime
 from django.views.decorators.http import require_POST
@@ -36,7 +36,7 @@ def omr_answer_sheet_list(request):
     # annotate를 통해 해당 그룹 내 OMRResult 수(num_attendees)와 가장 최근 생성일(latest_created_at) 추출
     grouped_results = (
         OMRResult.objects
-        .values('exam_identifier', 'temp_exam_name')
+        .values('exam_identifier', 'exam_name')
         .annotate(
             num_attendees=Count('id'),
             exam_sheet_matched=Max('exam_sheet_matched'), # 그룹 내 어느 한 레코드(최대값)로 표시 - 모두 동일하다고 가정
@@ -53,8 +53,10 @@ def omr_answer_sheet_list(request):
 
 @require_POST
 def finalize(request):
+    print("finalize 호출됨")
     data = json.loads(request.body) # json 형태의 데이터를 파이썬 딕셔너리로 변환
-    temp_exam_name = data.get('temp_exam_name')
+    class_name = data.get('class_name')
+    exam_name = data.get('exam_name')
     omr_list = data.get('omr_data', [])
 
     for omr in omr_list:
@@ -67,7 +69,7 @@ def finalize(request):
         exam_date = datetime.strptime(exam_date_str, "%Y-%m-%d").date()
 
         # Student FK 매칭
-        student_id = omr['student_id']
+        student_id = omr.get('student_id')
         student = None
         if is_matched:
             if student_id:
@@ -97,7 +99,8 @@ def finalize(request):
             unmatched_student_code=None,
             unmatched_student_name=None,
             answers=answers,
-            temp_exam_name=temp_exam_name
+            class_name=class_name,
+            exam_name=exam_name
         )
 
     return JsonResponse({'status':'success', 'redirect_url': reverse('omr_app:omr_answer_sheet_list')})
@@ -170,8 +173,7 @@ def omr_result_list(request):
     if teacher_code:
         results = results.filter(teacher_code=teacher_code)
     if student_name:
-        results = results.filter(student_name__icontains=student_name)
-    
+        results = results.filter(student__name__icontains=student_name)
     return render(request, 'omr_app/omr_result_list.html', {
         'results': results, # 전체 df를 테이블에 표시하기 위함
         'exam_dates': OMRResult.objects.dates('exam_date', 'day', order='DESC'), 
@@ -242,7 +244,8 @@ distinct() : unique()와 같은 기능 (중복된 값 제외)
 
 def student_detail(request, student_id):
     student = get_object_or_404(Student, id=student_id)
-    omr_results = OMRResult.objects.filter(id=student_id).order_by('-exam_date')
+    omr_results = OMRResult.objects.filter(student_id=student_id).order_by('-exam_date')
+
     
     return render(request, 'omr_app/student_detail.html', {
         'student': student,
@@ -262,7 +265,7 @@ def student_add(request):
                 'phone_number', 'parent_phone', 'note', 
             ]
             
-            # 입력된 선택적 필드만 student_data에 추가
+            # 값이 입력된 필드만 student_data에 추가
             for field in optional_fields:
                 val = request.POST.get(field)
                 if val:
@@ -272,7 +275,7 @@ def student_add(request):
                     else:
                         student_data[field] = val
             
-            create_student(student_data)
+            Student.objects.create(**student_data)
             
             return JsonResponse({'status': 'success'})
             
@@ -327,13 +330,6 @@ def student_update(request, student_id): # url상의 <student_id> 변수를 받�
         if new_val != old_val_str:
             update_fields[field] = new_val if new_val != '' else None
     
-    
-    # registered_date가 업데이트 필드에 포함된 경우
-    if 'registered_date' in update_fields:
-        if update_fields['registered_date'] is None:
-            update_fields['registration_number'] = None
-        else:
-            update_fields['registration_number'] = generate_registration_number(update_fields['registered_date'], exclude_id=student_id)
 
     # update_fields에 값이 있는 경우 학생 정보 업데이트
     if update_fields:
