@@ -12,7 +12,19 @@ class Student(models.Model):
         (3, '3학년'),
     ]
     
+    # 재원 상태 필드
+    STATUS_CHOICES = [
+        ('enrolled', '재원'),  # 현재 재원 중인 학생
+        ('leave', '휴원'),    # 일시적 휴원
+        ('dropout', '퇴원'),  # 완전히 그만둔 경우
+        ('graduated', '졸업') # 졸업한 경우
+    ]
+    
     id = models.AutoField(primary_key=True)
+    status = models.CharField('재원 상태', max_length=10, choices=STATUS_CHOICES, default='enrolled')  
+    status_changed_date = models.DateField('상태변경일', null=True, blank=True)  # 신규 필드
+    
+
     student_code = models.CharField('학번', max_length=8, null=True, blank=True, unique=True)
     registration_number = models.CharField('등록번호', max_length=11, null=True, blank=True)
     registered_date = models.DateField(null=True, blank=True)

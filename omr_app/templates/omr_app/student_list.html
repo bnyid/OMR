@@ -93,11 +93,13 @@
     <button
       type="submit"
       name="action"
-      value="delete"
+      value="change_status"
       class="btn btn-danger"
       form="bulkActionForm"
+      data-bs-toggle="modal"
+      data-bs-target="#changeStatusModal"
     >
-      학생 삭제
+      상태 변경
     </button>
   </div>
 </div>
@@ -422,10 +424,9 @@
       });
     });
 
-    // 삭제 버튼 클릭 시 (value="delete"인 버튼)
-    $('button[value="delete"]').click(function (e) {
+    // 상태 변경 버튼 클릭 시 (value="change_status"인 버튼)
+    $('button[value="change_status"]').click(function (e) {
       e.preventDefault();
-
       const selectedStudents = $('input[name="selected_students"]:checked');
 
       if (selectedStudents.length === 0) {
@@ -433,35 +434,45 @@
         return;
       }
 
-      if (confirm("선택한 학생들을 삭제하시겠습니까?")) {
-        const form = $("#bulkActionForm")[0];
-        const formData = new FormData(form);
-        const deleteButton = $('button[value="delete"]');
-        formData.append("action", deleteButton.val());
+      // 선택된 학생 ID를 hidden input으로 추가
+      $("#selectedStudentsForStatus").empty();
+      selectedStudents.each(function () {
+        $("#selectedStudentsForStatus").append(
+          `<input type="hidden" name="selected_students" value="${$(
+            this
+          ).val()}">`
+        );
+      });
+    });
 
-        $.ajax({
-          url: "{% url 'omr_app:bulk_action' %}", // URL 수정
-          method: "POST",
-          data: formData,
-          processData: false,
-          contentType: false,
-          headers: {
-            "X-CSRFToken": "{{ csrf_token }}",
-          },
-          success: function (response) {
-            console.log("서버 응답:", response);
-            if (response.status === "success") {
-              window.location.reload();
-            } else {
-              alert(response.message || "삭제 중 오류가 발생했습니다.");
-            }
-          },
-          error: function (xhr, status, error) {
-            console.error("Error:", xhr.responseText);
-            alert("서버 오류가 발생했습니다. 다시 시도해주세요.");
-          },
-        });
-      }
+    // 모달 폼 제출 처리
+    $("#changeStatusForm").on("submit", function (e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      formData.append("action", "change_status");
+
+      $.ajax({
+        url: "{% url 'omr_app:bulk_action' %}",
+        method: "POST",
+        data: formData,
+        processData: false,
+        contentType: false,
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+        },
+        success: function (response) {
+          if (response.status === "success") {
+            location.reload();
+          } else {
+            alert(response.message || "상태 변경 중 오류가 발생했습니다.");
+          }
+          $("#changeStatusModal").modal("hide");
+        },
+        error: function (xhr, status, error) {
+          console.error("Error:", xhr.responseText);
+          alert("서버 오류가 발생했습니다. 다시 시도해주세요.");
+        },
+      });
     });
 
     // 전체 선택 체크박스 기능
@@ -735,4 +746,67 @@
     </div>
   </div>
 </div>
+
+<!-- 학생 상태 변경 모달 -->
+<div
+  class="modal fade"
+  id="changeStatusModal"
+  tabindex="-1"
+  aria-labelledby="changeStatusModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="changeStatusModalLabel">학생 상태 변경</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form id="changeStatusForm" method="post">
+          {% csrf_token %}
+          <!-- 선택된 학생들을 담을 hidden input -->
+          <div id="selectedStudentsForStatus"></div>
+          <div class="mb-3">
+            <label for="new_status" class="form-label">새 상태</label>
+            <select
+              class="form-control"
+              id="new_status"
+              name="new_status"
+              required
+            >
+              <option value="">선택</option>
+              <option value="leave">휴원</option>
+              <option value="dropout">퇴원</option>
+              <option value="graduated">졸업</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="new_status_date" class="form-label">상태 변경일</label>
+            <input
+              type="date"
+              class="form-control"
+              id="new_status_date"
+              name="new_status_date"
+              value="{{ today|date:'Y-m-d' }}"
+            />
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          취소
+        </button>
+        <button type="submit" class="btn btn-primary" form="changeStatusForm">
+          변경
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}

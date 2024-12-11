@@ -15,9 +15,13 @@ from django.views.decorators.http import require_POST
 from django.db.models import F, Value, DateField
 from django.db.models.functions import Coalesce
 
-from pdf2image import convert_from_bytes
+from datetime import date
 from django.views.decorators.http import require_POST
 import json
+
+from django.db.models.functions import Coalesce
+from django.db.models import Value, DateField
+
 
 ## 시험별 답안지 상세 페이지
 def omr_result_grouped_detail(request, exam_identifier):
@@ -189,7 +193,7 @@ def omr_result_detail(request, result_id):
 def student_list(request):
     try:
         # 기존 데이터 중 registered_date가 None이거나 잘못된 형식인 경우 처리
-        students_all = Student.objects.all()
+        students_all = Student.objects.filter(status='enrolled')
         print("전체 학생 수:", students_all.count())  # 디버깅용 출력
         
         for student in students_all:
@@ -204,7 +208,7 @@ def student_list(request):
                 print(f"학생 {student.student_id}의 등록일 초기화됨")  # 디버깅용 출력
         
         # 전체 학생 목록을 등록일, 학번 순으로 정렬
-        students = Student.objects.annotate( # annotate는 기존 모델에 없는 새로운 필드를 임시로 추가함.
+        students = Student.objects.filter(status='enrolled').annotate( # annotate는 기존 모델에 없는 새로운 필드를 임시로 추가함.
             sort_date=Coalesce( # Coalesce는 첫번째 인자가 None이면 두번째 인자를 반환함.
                 'registered_date',
                 Value('9999-12-31', output_field=DateField()) #9999-12-31은 문자열 이므로 date타입으로 바꿔서 두번째 인자로 전달함
@@ -215,8 +219,9 @@ def student_list(request):
         return render(request, 'omr_app/student_list.html', {
             'students': students, # 전체 df를 테이블에 표시하기 위함
             'grades': [1, 2, 3], # 학년 드롭다운 option 값으로 사용됨
-            'schools': Student.objects.values_list('school_name', flat=True).distinct(), # 학교 드롭다운 option 값으로 사용됨
-            'class_names': Student.objects.values_list('class_name', flat=True).distinct() # 반 드롭다운 option 값으로 사용됨 
+            'schools': Student.objects.filter(status='enrolled').values_list('school_name', flat=True).distinct(), # 학교 드롭다운 option 값으로 사용됨
+            'class_names': Student.objects.filter(status='enrolled').values_list('class_name', flat=True).distinct(), # 반 드롭다운 option 값으로 사용됨 
+            'today': date.today()
         })
         
     except Exception as e:
@@ -296,9 +301,11 @@ def bulk_action(request):
         })
 
     if action == 'delete':
-        Student.objects.filter(id__in=selected_students).delete()
-        return JsonResponse({'status': 'success'})
-    
+        # 기존 삭제 로직은 이제 사용하지 않을 예정이지만, 혹시나 유지할 경우 남겨둘 수 있음.
+        # Student.objects.filter(id__in=selected_students).delete()
+        # return JsonResponse({'status': 'success'})
+        return JsonResponse({'status': 'error','message': "삭제 기능은 비활성화되었습니다."})
+
     elif action == 'update':
         new_class_name = request.POST.get('new_class_name')
         new_school_name = request.POST.get('new_school_name')
@@ -309,6 +316,24 @@ def bulk_action(request):
             return JsonResponse({'status': 'success'})
         else:
             return JsonResponse({'status': 'error', 'message': "변경할 정보를 입력하세요."})
+
+    elif action == 'change_status':
+        new_status = request.POST.get('new_status')
+        new_status_date_str = request.POST.get('new_status_date')  # 추가
+        if new_status not in ['leave', 'dropout', 'graduated']:
+            return JsonResponse({'status': 'error', 'message': "유효한 상태가 아닙니다."})
+        
+        # 날짜 파싱
+        if new_status_date_str:
+            try:
+                new_status_date = datetime.strptime(new_status_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                return JsonResponse({'status': 'error', 'message': "날짜 형식이 올바르지 않습니다."})
+        else:
+            new_status_date = date.today()
+        Student.objects.filter(id__in=selected_students).update(status=new_status, status_changed_date=new_status_date)
+        return JsonResponse({'status': 'success'})
+    
     else:
         return JsonResponse({'status': 'error','message': "유효하지 않은 action입니다."})
 
@@ -340,3 +365,27 @@ def student_update(request, student_id): # url상의 <student_id> 변수를 받�
     else:
         return JsonResponse({'status': 'error','message': '수정할 정보가 없습니다.'})
             
+
+
+def inactive_student_list(request):
+    # enrolled가 아닌 학생들(leave, dropout, graduated)을 필터링
+    queryset = Student.objects.exclude(status='enrolled')
+    
+     # GET 파라미터로 status 필터 확인
+    status_filter = request.GET.get('status', '')
+    if status_filter in ['leave', 'dropout', 'graduated']:
+        queryset = queryset.filter(status=status_filter)
+    
+    # 상태 변경일 오름차순 정렬
+    # 상태변경일이 null일 수 있으므로 Coalesce를 사용하거나,
+    # 아니면 null일 경우를 고려(기존 데이터가 없다면 모두 null일 수도 있음)
+    # 여기서는 상태변경일이 없으면 9999-12-31 처리(가장 뒤로)
+
+    
+    queryset = queryset.annotate(
+        sort_date=Coalesce('status_changed_date', Value('9999-12-31', output_field=DateField()))
+    ).order_by('sort_date', 'name')
+
+    return render(request, 'omr_app/inactive_student_list.html', {
+        'students': queryset
+    })

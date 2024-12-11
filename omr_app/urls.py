@@ -12,6 +12,8 @@ urlpatterns = [
     path('students/<int:student_id>/update/', views.student_update, name='student_update'),
     path('students/search/', views.student_search, name='student_search'),
     path('bulk-action/', views.bulk_action, name='bulk_action'),
+    path('students/inactive/', views.inactive_student_list, name='inactive_student_list'),
+    
     
     # OMR 관련 엔드포인트
     path('omr/', views.omr_result_list, name='omr_result_list'),

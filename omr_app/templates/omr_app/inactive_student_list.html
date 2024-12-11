@@ -1,0 +1,56 @@
+{% extends 'base.html' %} {% block content %}
+<h2>미등원 학생 목록</h2>
+<div class="btn-group mb-3">
+  <a
+    href="{% url 'omr_app:inactive_student_list' %}"
+    class="btn btn-sm btn-outline-primary"
+    >전체</a
+  >
+  <a
+    href="{% url 'omr_app:inactive_student_list' %}?status=leave"
+    class="btn btn-sm btn-outline-primary"
+    >휴원</a
+  >
+  <a
+    href="{% url 'omr_app:inactive_student_list' %}?status=dropout"
+    class="btn btn-sm btn-outline-primary"
+    >퇴원</a
+  >
+  <a
+    href="{% url 'omr_app:inactive_student_list' %}?status=graduated"
+    class="btn btn-sm btn-outline-primary"
+    >졸업</a
+  >
+</div>
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>상태 변경일</th>
+      <th>재원 상태</th>
+      <th>등록번호</th>
+      <th>학번</th>
+      <th>이름</th>
+      <th>학교명</th>
+      <th>학년</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for student in students %}
+    <tr>
+      <td>{{ student.status_changed_date|date:'Y-m-d'|default:'-' }}</td>
+      <td>{{ student.get_status_display }}</td>
+      <td>{{ student.registration_number|default:'-' }}</td>
+      <td>{{ student.student_code|default:'-' }}</td>
+      <td>{{ student.name }}</td>
+      <td>{{ student.school_name|default:'-' }}</td>
+      <td>{{ student.grade|default:'-' }}</td>
+    </tr>
+    {% empty %}
+    <tr>
+      <td colspan="7">해당 상태의 미등원 학생이 없습니다.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
