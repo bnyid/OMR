@@ -21,9 +21,23 @@ urlpatterns = [
     path('omr/analyze/', views.omr_process, name='omr_process'),
     path('omr/finalize/', views.finalize, name='finalize'),
     path('omr/<int:result_id>/', views.omr_result_detail, name='omr_result_detail'),
-    
+    path('omr/bulk-delete/', views.bulk_omr_delete, name='bulk_omr_delete'),
+
     # 시험별 답안지 리스트 페이지
     path('omr/answer-sheets/', views.omr_answer_sheet_list, name='omr_answer_sheet_list'),
     # 시험별 답안지 상세 페이지
     path('omr/answer-sheets/<str:exam_identifier>/', views.omr_result_grouped_detail, name='omr_result_detail_grouped'),
+    
+    
+    
+     # 시험지 업로드 페이지
+    path('exam-sheet/upload/', views.upload_exam_sheet, name='upload_exam_sheet'),
+    path('exam-sheet/upload-exam/', views.upload_exam, name='upload_exam'),
+    path('exam-sheet/finalize/', views.finalize_exam, name='finalize_exam'),  # finalize_exam 엔드포인트 추가
+
+    
+    # 시험지 생성 처리 (추후 구현)
+    #path('exam-sheet/upload/create_exam_sheet/', views.create_exam_sheet, name='create_exam_sheet'),
+    
+
 ] 

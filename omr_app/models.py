@@ -1,6 +1,9 @@
 # models.py
 from django.db import models
 
+
+### 학생 모델 관련
+
 class Student(models.Model):
     SCHOOL_TYPE_CHOICES = [
         ('M', '중학교'),
@@ -23,7 +26,8 @@ class Student(models.Model):
     id = models.AutoField(primary_key=True)
     status = models.CharField('재원 상태', max_length=10, choices=STATUS_CHOICES, default='enrolled')  
     status_changed_date = models.DateField('상태변경일', null=True, blank=True)  # 신규 필드
-    
+    status_reason = models.TextField('상태변경사유', null=True, blank=True)  # 신규 추가 필드
+
 
     student_code = models.CharField('학번', max_length=8, null=True, blank=True, unique=True)
     registration_number = models.CharField('등록번호', max_length=11, null=True, blank=True)
@@ -74,20 +78,24 @@ class Student(models.Model):
         
         
     def save(self, *args, **kwargs):
-        # school_name과 grade가 모두 있을 때만 class_name_by_school 생성
-        if self.school_name and self.grade:
-            self.class_name_by_school = f"{self.school_name}{self.grade}"
-        else:
-            self.class_name_by_school = None
-        
-        # 등록번호가 비어있고 registered_date가 있다면 자동 생성
-        if self.registered_date and not self.registration_number:
-            self.registration_number = self.generate_registration_number(self.registered_date, exclude_id=self.id)
-
+        # detail_type이 있을 경우 자동으로 category와 evaluation_area 설정
+        if self.detail_type:
+            # CATEGORY_MAPPING과 EVALUATION_MAPPING에서 해당 detail_type에 대한 값을 가져옴
+            # 매핑에 없는 경우 빈 문자열('') 대신 None을 반환하도록 수정
+            self.category = self.CATEGORY_MAPPING.get(self.detail_type)
+            self.evaluation_area = self.EVALUATION_MAPPING.get(self.detail_type)
+            
+            # 매핑된 값이 없는 경우를 위한 예외처리
+            if self.category is None:
+                raise ValueError(f"Invalid detail_type: {self.detail_type}. No matching category found.")
+            if self.evaluation_area is None:
+                raise ValueError(f"Invalid detail_type: {self.detail_type}. No matching evaluation_area found.")
+                
         super().save(*args, **kwargs)   
         
     def __str__(self):
         return f"[{self.id} {self.student_code}] {self.name} ({self.class_name})"
+
 
 
 ## 시험지 모델 ##
@@ -104,7 +112,7 @@ class ExamSheet(models.Model):
         verbose_name_plural = '시험지들'
 
 
-## 원문 모델 ##
+### 원문 모델 ##
 class OriginalText(models.Model):
     TEXT_TYPE_CHOICES = [
         ('TB', '교과서'),
@@ -141,20 +149,96 @@ class ExternalText(OriginalText):
 
 ## 문제 모델 ##
 class Question(models.Model):
-    QUESTION_TYPES = [
-        ('SO', '순서배열'),
-        ('SI', '문장삽입'),
-        ('BL', '빈칸추론'),
-        ('IM', '함축의미'),
-        ('SU', '요약'),
-        ('VO', '문맥어휘'),
-        ('TH', '주제'),
-        ('TI', '제목'),
-        # 다른 유형들 추가 가능
+    
+    CATEGORY_CHOICES = [
+        ('단어', '단어'),
+        ('어법', '어법'),
+        ('독해', '독해'),
+        ('복합', '복합'),
     ]
+    
+    EVALUATION_AREA_CHOICES = [
+        ('단어', '단어'),
+        ('어법', '어법'),
+        ('글의_흐름_파악', '글의 흐름 파악'),
+        ('핵심_내용', '핵심 내용'),
+        ('논리적_추론', '논리적 추론'),
+        ('어휘', '어휘')
+    ]
+    
+    DETAIL_TYPE_CHOICES = [
+        ('객관식_어법', '객관식 어법'),
+        ('논술형_어법', '논술형 어법'),
+        
+        ('순서배열', '순서배열'),
+        ('문장삽입', '문장삽입'),
+        
+        ('제목', '제목'),
+        ('주제', '주제'),
+        ('요약문', '요약문'),
+        
+        ('빈칸추론', '빈칸추론'),
+        ('함축의미', '함축의미'),
+        
+        ('문맥어휘', '문맥어휘'),
+        ('영영풀이', '영영풀이')
+    ]
+    
+     # HWP 키워드와 detail_type 매핑
+    HWP_MAPPING_TO_DETAIL_TYPE = {
+        '어법': '객관식_어법',
+        '논술형(어법)': '논술형_어법',
+        
+        '순서': '순서배열',
+        '삽입': '문장삽입',
+
+        '제목': '제목',
+        '주제': '주제',
+        '요약': '요약문',
+        
+        '빈칸': '빈칸추론',
+        '함축': '함축의미',
+
+        '문맥': '문맥어휘',
+        '영영풀이': '영영풀이',
+    }
+    
+    # detail_type에 따른 evaluation_area 매핑
+    EVALUATION_MAPPING = {
+        '객관식_어법': '어법',
+        '논술형_어법': '어법',
+        '순서배열': '글의_흐름_파악',
+        '문장삽입': '글의_흐름_파악',
+        '제목': '핵심_내용',
+        '주제': '핵심_내용',
+        '요약문': '핵심_내용',
+        '빈칸추론': '논리적_추론',
+        '함축의미': '논리적_추론',
+        '문맥어휘': '어휘',
+        '영영풀이': '어휘'
+    }
+    
+    
+     # detail_type에 따른 category 매핑
+    CATEGORY_MAPPING = {
+        '객관식_어법': '어법',
+        '논술형_어법': '어법',
+        '순서배열': '독해',
+        '문장삽입': '독해',
+        '제목': '독해',
+        '주제': '독해',
+        '요약문': '독해',
+        '빈칸추론': '독해',
+        '함축의미': '독해',
+        '문맥어휘': '독해',
+        '영영풀이': '독해'
+    }
+
+    
+    
     ANSWER_FORMAT_CHOICES = [
         ('MC', '객관식'),  # Multiple Choice
-        ('SA', '주관식'),  # Short Answer
+        ('SA', '논술형'),  # Short Answer
     ]
     
     serial_number = models.CharField('일련번호', max_length=20, unique=True)
@@ -167,16 +251,13 @@ class Question(models.Model):
     # 원문 연결 (교과서/모의고사/외부지문)
     original_text = models.ForeignKey(OriginalText, on_delete=models.PROTECT, verbose_name='원문')
     
-    type = models.CharField('유형', max_length=2, choices=QUESTION_TYPES)
+    category = models.CharField('구분', max_length=10, choices=CATEGORY_CHOICES, null=True, blank=True)
+    evaluation_area = models.CharField('평가영역', max_length=20, choices=EVALUATION_AREA_CHOICES, null=True, blank=True)
+    detail_type_1 = models.CharField('상세유형1', max_length=20, choices=DETAIL_TYPE_CHOICES, null=True, blank=True)
+    detail_type_2 = models.CharField('상세유형2', max_length=20, choices=DETAIL_TYPE_CHOICES, null=True, blank=True)
     answer_format = models.CharField('답안형식', max_length=2, choices=ANSWER_FORMAT_CHOICES, default='MC')
     content = models.TextField('본문')
     
-    # 보기 객관식인 경우에만 사용
-    choice_1 = models.CharField('보기1', max_length=200, null=True, blank=True)
-    choice_2 = models.CharField('보기2', max_length=200, null=True, blank=True)
-    choice_3 = models.CharField('보기3', max_length=200, null=True, blank=True)
-    choice_4 = models.CharField('보기4', max_length=200, null=True, blank=True)
-    choice_5 = models.CharField('보기5', max_length=200, null=True, blank=True)
     
     answer = models.CharField('정답', max_length=100)
     explanation = models.TextField('해설')
@@ -184,88 +265,84 @@ class Question(models.Model):
     created_at = models.DateTimeField('생성일', auto_now_add=True)
     updated_at = models.DateTimeField('수정일', auto_now=True)
     
+    
+    is_double_question = models.BooleanField('2문제 여부', default=False)
+    double_question_label = models.CharField('지문 라벨', max_length=100, null=True, blank=True, help_text='예: 다음 글을 읽고 물음에 답하시오.')
+
+    question_text_1 = models.TextField('발문1', default='')
+    question_text_2 = models.TextField('발문2', null=True, blank=True)
+    
+    
+    
     class Meta:
         verbose_name = '문제'
         verbose_name_plural = '문제들'
 
-# 주제
-class ThemeQuestion(Question):
-    question_text = models.TextField('발문')
+    def save(self, *args, **kwargs):
+        # detail_type_1은 필수값이므로 항상 처리
+        self.category = self.CATEGORY_MAPPING.get(self.detail_type_1)
+        self.evaluation_area = self.EVALUATION_MAPPING.get(self.detail_type_1)
+        
+        # detail_type_2가 있는 경우 (2문제 문항)
+        if self.detail_type_2:
+            # 두 문제의 카테고리가 다른 경우 '복합'으로 처리
+            if self.CATEGORY_MAPPING.get(self.detail_type_2) != self.category:
+                self.category = '복합'
+            
+            # 평가영역도 다른 경우 '복합'으로 처리
+            if self.EVALUATION_MAPPING.get(self.detail_type_2) != self.evaluation_area:
+                self.evaluation_area = '복합'
+
+
+# 보기 모델 (Choice 모델과 Question 모델 1:1 관계)
+
+
+
+class QuestionTable(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='tables')
+    table_group = models.IntegerField('테이블 그룹', default=1)  # 발문1 또는 발문2에 대한 테이블
+    
+    table_type = models.CharField('표 유형', max_length=10, choices=[
+        ('CONDITION', '조건'),
+        ('EXAMPLE', '보기'),
+        ('SUMMARY', '요약문')
+    ])
+    content = models.TextField('표 내용')
+
     
     class Meta:
-        verbose_name = '주제 문제'
-        verbose_name_plural = '주제 문제들'
-
-# 제목
-class TitleQuestion(Question):
-    question_text = models.TextField('발문')
-    
-    class Meta:
-        verbose_name = '제목 문제'
-        verbose_name_plural = '제목 문제들'
-
-
-# 순서배열
-class SequenceOrderQuestion(Question):
-    question_text = models.TextField('발문')
-    text_a = models.TextField('본문A')
-    text_b = models.TextField('본문B')
-    text_c = models.TextField('본문C')
-    
-    class Meta:
-        verbose_name = '순서배열 문제'
-        verbose_name_plural = '순서배열 문제들'
-
-# 문장삽입
-class SentenceInsertQuestion(Question):
-    question_text = models.TextField('발문')
-    insert_sentence = models.TextField('삽입 문장')
-    first_sentence = models.TextField('첫 문장')
-    sentence_1 = models.TextField('1번 뒤 문장')
-    sentence_2 = models.TextField('2번 뒤 문장')
-    sentence_3 = models.TextField('3번 뒤 문장')
-    sentence_4 = models.TextField('4번 뒤 문장')
-    sentence_5 = models.TextField('5번 뒤 문장')
-    
-    class Meta:
-        verbose_name = '문장삽입 문제'
-        verbose_name_plural = '문장삽입 문제들'
-
-# 빈칸추론
-class BlankInferenceQuestion(Question):
-    question_text = models.TextField('발문')
-    blank_text = models.TextField('빈칸 본문')
-    
-    class Meta:
-        verbose_name = '빈칸추론 문제'
-        verbose_name_plural = '빈칸추론 문제들'
-
-# 함축의미
-class ImpliedMeaningQuestion(Question):
-    question_text = models.TextField('발문')
-    underlined_sentence = models.TextField('밑줄 문장')
-    
-    class Meta:
-        verbose_name = '함축의미 문제'
-        verbose_name_plural = '함축의미 문제들'
+        verbose_name = '문제 테이블'
+        verbose_name_plural = '문제 테이블들'
+        ordering = ['table_group', 'table_type']
         
 
-# 요약
-class SummaryQuestion(Question):
-    question_text = models.TextField('발문')
-    summary_text = models.TextField('요약문')
+class Choice(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices')
+    choice_group = models.IntegerField('보기 그룹', default=1)  # 발문1 또는 발문2에 대한 보기
+    choice_number = models.IntegerField('보기 번호')  # 1, 2, 3, 4, 5
+    text_content = models.TextField('텍스트 내용')
     
     class Meta:
-        verbose_name = '요약 문제'
-        verbose_name_plural = '요약 문제들'
+        verbose_name = '보기'
+        verbose_name_plural = '보기들'
+        ordering = ['choice_group', 'choice_number']
+        unique_together = ['question', 'choice_group', 'choice_number']
 
-# 문맥어휘
-class VocaInContextQuestion(Question):
-    question_text = models.TextField('발문')
+
+## 주관식 답안 작성란
+class AnswerField(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='answer_fields')
+    field_group = models.IntegerField('작성란 그룹', default=1)  # 발문1 또는 발문2에 대한 작성란
+    text_format = models.TextField('작성란 형식')  # ex: "______", "(A): __________"
     
     class Meta:
-        verbose_name = '문맥어휘 문제'
-        verbose_name_plural = '문맥어휘 문제들'
+        verbose_name = '답안 작성란'
+        verbose_name_plural = '답안 작성란들'
+        ordering = ['field_group', 'id']
+
+
+
+
 
 # 시험지와 문제 매핑 모델
 class ExamSheetQuestionMapping(models.Model):
@@ -278,12 +355,21 @@ class ExamSheetQuestionMapping(models.Model):
         verbose_name_plural = '시험지-문제 매핑들'
         unique_together = ['exam_sheet', 'question_number']  # 같은 시험지 내에서 문항번호 중복 방지
         
+        
+        
+        
 ## OMR 결과 모델 ##
 class OMRResult(models.Model):
     exam_date = models.DateField('시험 날짜')
     teacher_code = models.CharField('강사코드', max_length=2)  # '01', '02', ... 형태로 저장
     exam_identifier = models.CharField('시험식별자', max_length=8, null=True, blank=True)  # exam_date와 teacher_code 결합 후 save()에서 자동 설정
-    exam_sheet_matched = models.BooleanField('문제지 매칭 여부', default=False)
+    exam_sheet = models.ForeignKey('ExamSheet', 
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='omr_results',
+        verbose_name='시험지'
+    )
     
     student = models.ForeignKey(Student, on_delete=models.CASCADE, null=True, blank=True)
     is_matched = models.BooleanField('매칭 여부', default=False)
@@ -296,7 +382,7 @@ class OMRResult(models.Model):
     created_at = models.DateTimeField('생성일', auto_now_add=True)
     
     class_name = models.CharField('반이름', max_length=20, null=True, blank=True)
-    exam_name = models.CharField('시험명', max_length=50, null=True, blank=True)
+    omr_name = models.CharField('OMR 이름', max_length=50, default='', blank=True)
     
     class Meta:
         verbose_name = 'OMR 결과'
@@ -315,6 +401,5 @@ class OMRResult(models.Model):
         # student_name은 student가 있으면 student.name, 없으면 unmatched_student_name 사용(것도 없으면 미매칭)
         name = self.student.name if self.student else (self.unmatched_student_name or "미매칭")
         return f"{self.exam_identifier} - {name}"
-    
     
     

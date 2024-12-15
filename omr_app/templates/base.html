@@ -1,3 +1,4 @@
+<!-- base.html-->
 <!DOCTYPE html>
 <html lang="ko">
   <head>
@@ -37,6 +38,9 @@
           <a class="nav-link" href="{% url 'omr_app:omr_answer_sheet_list' %}"
             >OMR 목록</a
           >
+          <a class="nav-link" href="{% url 'omr_app:upload_exam_sheet' %}">
+            시험지 업로드
+          </a>
           <a class="nav-link" href="{% url 'omr_app:omr_result_list' %}"
             >시험 결과</a
           >

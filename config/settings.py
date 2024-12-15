@@ -1,3 +1,5 @@
+# config/settings.py
+
 """
 Django settings for config project.
 
@@ -131,3 +133,5 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
+# 임시 파일 저장 디렉토리
+TEMP_DIR = os.path.join(BASE_DIR, 'temp')

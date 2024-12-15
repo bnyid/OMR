@@ -1,26 +1,28 @@
 # views.py
+import json, os
+from datetime import date, datetime
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.urls import reverse
-from .models import OMRResult, Student
-from django.db.models import Q, Count, Max
 
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+
+from django.urls import reverse
+
+from django.conf import settings
+
+from django.db.models import Q, Count, Max, Value, DateField
+from django.db.models.functions import Coalesce
 
 from .services.omr_service import process_pdf_and_extract_omr, extract_omr_data_from_image
 from .services.student_service import update_students
+from .services.hwp_service import extract_question_data
 
-from datetime import datetime
-from django.views.decorators.http import require_POST
-from django.db.models import F, Value, DateField
-from django.db.models.functions import Coalesce
+from .models import OMRResult, Student, ExamSheet, OriginalText
 
-from datetime import date
-from django.views.decorators.http import require_POST
-import json
 
-from django.db.models.functions import Coalesce
-from django.db.models import Value, DateField
+
 
 
 ## 시험별 답안지 상세 페이지
@@ -34,23 +36,34 @@ def omr_result_grouped_detail(request, exam_identifier):
 
 
 
-## 시험별 답안지 리스트 페이지
 def omr_answer_sheet_list(request):
-    # OMRResult를 exam_identifier, temp_exam_name으로 그룹화
-    # annotate를 통해 해당 그룹 내 OMRResult 수(num_attendees)와 가장 최근 생성일(latest_created_at) 추출
-    grouped_results = (
-        OMRResult.objects
-        .values('exam_identifier', 'exam_name')
+    from django.db.models import Min
+
+    unmatched_grouped_results = (
+        OMRResult.objects.filter(exam_sheet__isnull=True)
+        .values('exam_identifier', 'class_name','omr_name')
         .annotate(
             num_attendees=Count('id'),
-            exam_sheet_matched=Max('exam_sheet_matched'), # 그룹 내 어느 한 레코드(최대값)로 표시 - 모두 동일하다고 가정
-            latest_created_at=Max('created_at')
+            latest_created_at=Max('created_at'),
+            exam_date=Min('exam_date')  
         )
-        .order_by('-latest_created_at')  # 가장 최근 생성일이 위로
+        .order_by('-latest_created_at')
+    )
+
+    matched_grouped_results = (
+        OMRResult.objects.filter(exam_sheet__isnull=False)
+        .values('exam_identifier', 'class_name' , 'omr_name',)
+        .annotate(
+            num_attendees=Count('id'),
+            latest_created_at=Max('created_at'),
+            exam_date=Min('exam_date')  # exam_date 추가
+        )
+        .order_by('-latest_created_at')
     )
 
     return render(request, 'omr_app/omr_answer_sheet_list.html', {
-        'grouped_results': grouped_results
+        'unmatched_grouped_results': unmatched_grouped_results,
+        'matched_grouped_results': matched_grouped_results
     })
 
 
@@ -60,7 +73,7 @@ def finalize(request):
     print("finalize 호출됨")
     data = json.loads(request.body) # json 형태의 데이터를 파이썬 딕셔너리로 변환
     class_name = data.get('class_name')
-    exam_name = data.get('exam_name')
+    omr_name = data.get('omr_name')
     omr_list = data.get('omr_data', [])
 
     for omr in omr_list:
@@ -104,7 +117,7 @@ def finalize(request):
             unmatched_student_name=None,
             answers=answers,
             class_name=class_name,
-            exam_name=exam_name
+            omr_name=omr_name
         )
 
     return JsonResponse({'status':'success', 'redirect_url': reverse('omr_app:omr_answer_sheet_list')})
@@ -130,7 +143,21 @@ def student_search(request):
 
 
 def show_omr_upload_page(request):
-    return render(request, 'omr_app/omr_upload.html')
+    # 재원중인 학생들 필터
+    enrolled_students = Student.objects.filter(status='enrolled')
+    
+    # 소속반 목록 추출 (None이나 빈 문자열 제외)
+    class_name_list = enrolled_students.values_list('class_name', flat=True).distinct()
+    class_name_list = [cn for cn in class_name_list if cn and cn.strip()]
+
+    # 학교반 목록 추출 (None이나 빈 문자열 제외)
+    class_name_by_school_list = enrolled_students.values_list('class_name_by_school', flat=True).distinct()
+    class_name_by_school_list = [cns for cns in class_name_by_school_list if cns and cns.strip()]
+
+    return render(request, 'omr_app/omr_upload.html', {
+        'class_name_list': class_name_list,
+        'class_name_by_school_list': class_name_by_school_list,
+    })
 
 @csrf_exempt
 def omr_process(request):
@@ -300,13 +327,7 @@ def bulk_action(request):
             'message': "선택된 학생이 없습니다."
         })
 
-    if action == 'delete':
-        # 기존 삭제 로직은 이제 사용하지 않을 예정이지만, 혹시나 유지할 경우 남겨둘 수 있음.
-        # Student.objects.filter(id__in=selected_students).delete()
-        # return JsonResponse({'status': 'success'})
-        return JsonResponse({'status': 'error','message': "삭제 기능은 비활성화되었습니다."})
-
-    elif action == 'update':
+    if action == 'update':
         new_class_name = request.POST.get('new_class_name')
         new_school_name = request.POST.get('new_school_name')
         new_grade = request.POST.get('new_grade')
@@ -320,9 +341,11 @@ def bulk_action(request):
     elif action == 'change_status':
         new_status = request.POST.get('new_status')
         new_status_date_str = request.POST.get('new_status_date')  # 추가
+        new_status_reason = request.POST.get('new_status_reason','').strip()  # 추가
+        
         if new_status not in ['leave', 'dropout', 'graduated']:
             return JsonResponse({'status': 'error', 'message': "유효한 상태가 아닙니다."})
-        
+    
         # 날짜 파싱
         if new_status_date_str:
             try:
@@ -331,7 +354,21 @@ def bulk_action(request):
                 return JsonResponse({'status': 'error', 'message': "날짜 형식이 올바르지 않습니다."})
         else:
             new_status_date = date.today()
-        Student.objects.filter(id__in=selected_students).update(status=new_status, status_changed_date=new_status_date)
+        Student.objects.filter(id__in=selected_students).update(status=new_status, status_changed_date=new_status_date, status_reason=new_status_reason)
+        return JsonResponse({'status': 'success'})
+    
+    elif action == 're_enroll':
+        # 등원 처리: status='enrolled', 상태변경일/사유 초기화
+        Student.objects.filter(id__in=selected_students).update(
+            status='enrolled',
+            status_changed_date=None,
+            status_reason=None
+        )
+        return JsonResponse({'status': 'success'})
+
+    elif action == 'delete_permanently':
+        # 완전 삭제
+        Student.objects.filter(id__in=selected_students).delete()
         return JsonResponse({'status': 'success'})
     
     else:
@@ -389,3 +426,73 @@ def inactive_student_list(request):
     return render(request, 'omr_app/inactive_student_list.html', {
         'students': queryset
     })
+    
+    
+    
+@require_POST
+def bulk_omr_delete(request):
+    print("bulk_omr_delete 호출됨")
+    exam_identifiers = request.POST.getlist('selected_exam_identifier')
+    omr_names = request.POST.getlist('selected_omr_name')
+    class_names = request.POST.getlist('selected_class_name')
+
+    if not exam_identifiers or not omr_names:
+        return JsonResponse({'status': 'error', 'message': '선택된 시험지가 없습니다.'})
+    
+    if len(exam_identifiers) != len(omr_names):
+        return JsonResponse({'status': 'error', 'message': '데이터 불일치가 발생했습니다.'})
+
+     # 각각 (exam_identifier, omr_name, class_name) 쌍에 대해 삭제 수행
+    for ident, oname, cname in zip(exam_identifiers, omr_names, class_names):
+        OMRResult.objects.filter(exam_identifier=ident, omr_name=oname, class_name=cname).delete()
+
+    return JsonResponse({'status': 'success'})
+
+
+def upload_exam_sheet(request):
+    """시험지 업로드 페이지를 렌더링"""
+    return render(request, 'omr_app/upload_exam_sheet.html')
+
+
+
+def upload_exam(request):
+    print("upload_exam 함수 호출됨")
+    if request.method == 'POST' and request.FILES.get('hwp_file'):
+        hwp_file = request.FILES['hwp_file']
+        
+        if not os.path.exists(settings.TEMP_DIR):
+            os.makedirs(settings.TEMP_DIR)
+        
+        temp_path = os.path.join(settings.TEMP_DIR, hwp_file.name)
+        with open(temp_path, 'wb+') as destination:
+            for chunk in hwp_file.chunks():
+                destination.write(chunk)
+                
+        try:
+            # 문제 데이터 추출
+            question_data = extract_question_data(temp_path)
+            print(question_data)
+            # 세션에 데이터 저장 (임시 저장)
+            request.session['temp_question_data'] = question_data
+            
+            return JsonResponse({
+                'status': 'success',
+                'data': question_data
+            })
+            
+        finally:
+            # 임시 파일 삭제
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+    return render(request, 'omr_app/upload_exam_sheet.html')
+
+
+def finalize_exam(request):
+    # 최종 제출 시 받는 AJAX POST 요청 처리용 뷰
+    # exam_name, data를 JSON으로 받는다고 가정
+    if request.method == 'POST':
+        # 실제 ExamSheet 생성 등의 로직
+        # 여기서는 단순히 성공 응답
+        return JsonResponse({'status': 'success', 'redirect_url': '/'})
+    return JsonResponse({'status': 'error', 'message': 'Only POST allowed'}, status=405)
