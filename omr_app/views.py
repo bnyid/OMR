@@ -17,7 +17,8 @@ from django.db.models.functions import Coalesce
 
 from .services.omr_service import process_pdf_and_extract_omr, extract_omr_data_from_image
 from .services.student_service import update_students
-from .services.hwp_service import extract_question_data
+from .services.hwp_service import extract_question_data, HwpProcessManager
+from .services.hwp_service_upgrade import extract_exam_sheet_data
 
 from .models import OMRResult, Student, ExamSheet, OriginalText
 
@@ -164,7 +165,7 @@ def omr_process(request):
     if request.method == 'POST' and request.FILES.get('file'):
         print("omr_process 호출됨")
         uploaded_file = request.FILES['file']
-        file_name = uploaded_file.name.lower() # 파일 확장자나 Content_Type으로 PDF vs Image 판별
+        file_name = uploaded_file.name.lower() # 파일 확장자��� Content_Type으로 PDF vs Image 판별
 
         if file_name.endswith('.pdf'):  # PDF -> 여러 페이지가 포함될 수 있어 다르게 처리
             omr_results = process_pdf_and_extract_omr(uploaded_file)
@@ -464,15 +465,12 @@ def upload_exam(request):
             os.makedirs(settings.TEMP_DIR)
         
         temp_path = os.path.join(settings.TEMP_DIR, hwp_file.name)
-        with open(temp_path, 'wb+') as destination:
-            for chunk in hwp_file.chunks():
-                destination.write(chunk)
-                
         try:
-            # 문제 데이터 추출
-            question_data = extract_question_data(temp_path)
-            print(question_data)
-            # 세션에 데이터 저장 (임시 저장)
+            with open(temp_path, 'wb+') as destination:
+                for chunk in hwp_file.chunks():
+                    destination.write(chunk)
+                    
+            question_data = extract_exam_sheet_data(temp_path,visible=False)
             request.session['temp_question_data'] = question_data
             
             return JsonResponse({
@@ -480,12 +478,16 @@ def upload_exam(request):
                 'data': question_data
             })
             
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': str(e)
+            })
         finally:
-            # 임시 파일 삭제
+            # 임시 파일과 HWP 프로세스 정리
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-                
-    return render(request, 'omr_app/upload_exam_sheet.html')
+            HwpProcessManager.kill_hwp_processes()
 
 
 def finalize_exam(request):

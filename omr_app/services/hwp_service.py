@@ -3,6 +3,39 @@ import re
 import pythoncom
 from pyhwpx import Hwp
 
+import psutil
+import win32com.client
+import atexit
+import signal
+import sys
+
+############## 안전 실행 START #################
+
+class HwpProcessManager:
+    @staticmethod
+    def kill_hwp_processes():
+        try:
+            for proc in psutil.process_iter():
+                try:
+                    if proc.name().lower() in ['hwp.exe', 'hword.exe']:
+                        proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+        except Exception as e:
+            print(f"HWP 프로세스 종료 중 오류: {e}")
+
+    @staticmethod
+    def safe_hwp_quit(hwp):
+        try:
+            if hwp:
+                hwp.Clear(3)  # 모든 문서 닫기
+                hwp.Quit()
+                pythoncom.CoUninitialize()
+        except Exception as e:
+            print(f"HWP 종료 중 오류: {e}")
+            HwpProcessManager.kill_hwp_processes()
+            
+############## 안전 실행 END #################
 
 def go_to_index(hwp):
     hwp.SetMessageBoxMode(0x00020000) # 계속 찾으시겠습니까? No
@@ -16,12 +49,34 @@ def go_to_index(hwp):
         hwp.SetMessageBoxMode(0x000F0000) # 기본값으로 돌리기
         return False
     
-def extract_text_from_block(hwp):  # 이 함수명을 영어로 바꾸면 = extract_text_from_block
+    
+
+
+def extract_text_from_block_lines(hwp):  
+    result_text = ""
+    hwp.InitScan(range=0xff)  # 스캔 초기화
+    
+    while True:
+        state, text = hwp.GetText()
+        
+        # 상태 체크
+        if state <= 1:  # 텍스트가 없거나 끝난 경우
+            break
+            
+        result_text += text  # 텍스트 누적
+        
+    hwp.ReleaseScan()  # 스캔 해제
+    return result_text
+
+
+
+def extract_text_from_block(hwp):  
     hwp.InitScan(range=0xff)  # 0xff <<선택된 범위 내에서 검색
     _, text_blokced = hwp.GetText()  # 텍스트만 추출
     hwp.ReleaseScan() # 스캔을 해제.
     print(f"text_blokced: {text_blokced}")
     return text_blokced # 이경우, 해당 target이 text에 포함되어있으면 True, 아니면 False를 반환.
+
 
 def search_text_condition(hwp, text): 
     """조건식사용에 체크하고 텍스트 검색
@@ -159,7 +214,21 @@ def convert_circled_number(text):
     return result
 
 
+def extract_source_from_index_text(index_text):
+    # '#' 제거
+    text = index_text.lstrip('#').strip()
+    
+    # 일련번호가 있는 경우 처리
+    if text.startswith('['):
+        text = text.split(']', 1)[1].strip()
+    
+    # '-' 를 기준으로 분리하여 앞부분(source) 추출
+    source = text.split('-')[0].strip()
+    
+    return source
 
+
+''' 정규식 용으로 남겨두었음
 def extract_source_text(hwp, text):
     pattern = re.compile(r"(고\d+ \d+년 \d+월 \d+번)")
     match = pattern.search(text)
@@ -167,7 +236,7 @@ def extract_source_text(hwp, text):
         source_text = match.group(1)  # 첫 번째 그룹(괄호 안)에 해당하는 문자열
         return source_text
     return None
-
+'''
 
 
 
@@ -285,7 +354,7 @@ def extract_basic_data(hwp):
                 if para_num == place_2[1]:
                     break
 
-            explanation_text = extract_text_from_block(hwp)
+            explanation_text = extract_text_from_block_lines(hwp)
             
             question_dict = {
                 'number': i,
@@ -323,7 +392,15 @@ def extract_type_and_source_data(hwp):
         hwp.Run("MoveParaBegin")
         hwp.Run("MoveSelParaEnd")
         index_text = extract_text_from_block(hwp)
-        source_text = extract_source_text(hwp, index_text)
+
+        # 일련번호 저장
+        serial_number = index_text.split("]")
+        if len(serial_number) > 1:
+            serial_number = serial_number[0].lstrip("[")  # '[' 제거
+        else:
+            serial_number = None
+        
+        source_text = extract_source_from_index_text(index_text)
         type_texts = index_text.split(",") # type 두개를 리스트로 저장 -> 반복문 돌릴 예정
         print(type_texts)
         # type_text = type_texts
@@ -363,17 +440,13 @@ def extract_type_and_source_data(hwp):
         'essay': q_essay_data_list
     }
 
-def extract_question_data(hwp_file_path, visible=True):
-    """
-    HWP 파일에서 문제 데이터를 추출하는 메인 함수
-    """
-    
-    pythoncom.CoInitialize()
-    hwp = Hwp(visible=visible)
-    hwp.Open(hwp_file_path)
-    
+def extract_question_data(hwp_file_path, visible=False):
+    hwp = None
     try:
-        # 객관식/논술형 문제 기본 데이터 추출
+        pythoncom.CoInitialize()
+        hwp = Hwp(visible=visible)
+        hwp.Open(hwp_file_path)
+        
         multiple_data, essay_data = extract_basic_data(hwp)
         
         # 세부 유형 및 출처 데이터 추출
@@ -388,5 +461,22 @@ def extract_question_data(hwp_file_path, visible=True):
             'essay': essay_final
         }
         
+    except Exception as e:
+        print(f"에러 발생: {e}")
+        raise
+    
     finally:
-        hwp.Quit()
+        HwpProcessManager.safe_hwp_quit(hwp)
+
+'''
+from pyhwpx import Hwp
+hwp = Hwp()
+
+
+text = hwp.GetText()
+hwp.HAction.Run("InsertText", hwp.HParameterSet.HInsertText.HSet)
+hwp.HParameterSet.HInsertText.HSet.SetItem("Text", text)
+hwp.HParameterSet.HInsertText.HSet.SetItem("Pos", hwp.GetPos())
+hwp.HParameterSet.HInsertText.HSet.SetItem("Sel", 1)
+hwp.HAction.Execute("InsertText", hwp.HParameterSet.HInsertText.HSet)
+'''
