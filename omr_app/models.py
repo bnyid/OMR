@@ -1,6 +1,6 @@
 # models.py
 from django.db import models
-
+import re
 
 ### 학생 모델 관련
 
@@ -100,8 +100,6 @@ class Student(models.Model):
 
 ## 시험지 모델 ##
 class ExamSheet(models.Model):
-    serial_number = models.CharField('일련번호', max_length=20, unique=True)
-    exam_date = models.DateField('시행일')
     title = models.CharField('시험명', max_length=100)
     total_questions = models.IntegerField('총 문항수')
     created_at = models.DateTimeField('생성일', auto_now_add=True)
@@ -119,6 +117,7 @@ class OriginalText(models.Model):
         ('ET', '모의고사'),
         ('EX', '외부지문'),
     ]
+    text_source = models.CharField('원문 출처', max_length=200, null=True, blank=True)
     
     text_type = models.CharField('원문 유형', max_length=2, choices=TEXT_TYPE_CHOICES)
     content = models.TextField('본문')
@@ -145,6 +144,27 @@ class ExamText(OriginalText):
 class ExternalText(OriginalText):
     category1 = models.CharField('구분1', max_length=100)
     category2 = models.CharField('구분2', max_length=100)
+
+
+class Passage(models.Model):
+    """
+    한 지문(Passage)을 저장하는 모델
+    - passage_source: 지문 출처(예: '수능 2023년 6월', '고2 2022년 7월 34번' 등)
+    - passage_text: 지문 본문(HTML 또는 일반 텍스트)
+    - passage_table: 지문 내에 포함된 표(HTML). 여러 개면 <hr>로 구분하거나, JSON으로 저장해도 됨
+    - created_at, updated_at: 생성/수정 시각
+    """
+    passage_source = models.CharField('지문출처', max_length=200, null=True, blank=True,
+                                      help_text="원본을 명시하고 싶을 경우.")
+    passage_text = models.TextField('지문 내용', blank=True, null=True)
+    passage_table = models.TextField('지문 표(HTML)', blank=True, null=True)
+
+    created_at = models.DateTimeField('생성일', auto_now_add=True)
+    updated_at = models.DateTimeField('수정일', auto_now=True)
+
+    def __str__(self):
+        return f"Passage #{self.id} - {self.passage_source or ''}"
+
 
 
 ## 문제 모델 ##
@@ -247,16 +267,20 @@ class Question(models.Model):
         through='ExamSheetQuestionMapping',
         related_name='questions'
     )
-    
-    # 원문 연결 (교과서/모의고사/외부지문)
-    original_text = models.ForeignKey(OriginalText, on_delete=models.PROTECT, verbose_name='원문')
+
+    passage = models.ForeignKey(
+        Passage,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='questions',
+        verbose_name='연결된 지문'
+    )
     
     category = models.CharField('구분', max_length=10, choices=CATEGORY_CHOICES, null=True, blank=True)
     evaluation_area = models.CharField('평가영역', max_length=20, choices=EVALUATION_AREA_CHOICES, null=True, blank=True)
-    detail_type_1 = models.CharField('상세유형1', max_length=20, choices=DETAIL_TYPE_CHOICES, null=True, blank=True)
-    detail_type_2 = models.CharField('상세유형2', max_length=20, choices=DETAIL_TYPE_CHOICES, null=True, blank=True)
+    detail_type = models.CharField('상세유형', max_length=20, choices=DETAIL_TYPE_CHOICES, null=True, blank=True)
     answer_format = models.CharField('답안형식', max_length=2, choices=ANSWER_FORMAT_CHOICES, default='MC')
-    content = models.TextField('본문')
     
     
     answer = models.CharField('정답', max_length=100)
@@ -264,13 +288,8 @@ class Question(models.Model):
     
     created_at = models.DateTimeField('생성일', auto_now_add=True)
     updated_at = models.DateTimeField('수정일', auto_now=True)
-    
-    
-    is_double_question = models.BooleanField('2문제 여부', default=False)
-    double_question_label = models.CharField('지문 라벨', max_length=100, null=True, blank=True, help_text='예: 다음 글을 읽고 물음에 답하시오.')
 
-    question_text_1 = models.TextField('발문1', default='')
-    question_text_2 = models.TextField('발문2', null=True, blank=True)
+    question_text = models.TextField('발문', default='')
     
     
     
@@ -279,66 +298,91 @@ class Question(models.Model):
         verbose_name_plural = '문제들'
 
     def save(self, *args, **kwargs):
-        # detail_type_1은 필수값이므로 항상 처리
-        self.category = self.CATEGORY_MAPPING.get(self.detail_type_1)
-        self.evaluation_area = self.EVALUATION_MAPPING.get(self.detail_type_1)
-        
-        # detail_type_2가 있는 경우 (2문제 문항)
-        if self.detail_type_2:
-            # 두 문제의 카테고리가 다른 경우 '복합'으로 처리
-            if self.CATEGORY_MAPPING.get(self.detail_type_2) != self.category:
-                self.category = '복합'
+        # serial_number가 없는 경우에만 생성
+        if not self.serial_number:
+            self.serial_number = self.generate_serial_number()
+
+        # 2. detail_type 기반 category/evaluation_area 매핑
+        if self.detail_type:
+            self.category = self.CATEGORY_MAPPING.get(self.detail_type)
+            self.evaluation_area = self.EVALUATION_MAPPING.get(self.detail_type)
             
-            # 평가영역도 다른 경우 '복합'으로 처리
-            if self.EVALUATION_MAPPING.get(self.detail_type_2) != self.evaluation_area:
-                self.evaluation_area = '복합'
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def generate_serial_number(cls):
+        """
+        AA0001부터 ZZ9999까지 순차적으로 증가하는 serial number를 생성
+        """
+        # 가장 최근 serial number 조회
+        last_question = cls.objects.order_by('-serial_number').first()
+        
+        if not last_question or not last_question.serial_number:
+            return 'AA0001'  # 첫 번째 serial number
+            
+        current_serial = last_question.serial_number
+        
+        # 알파벳 부분과 숫자 부분 분리
+        alpha_part = current_serial[:2]
+        num_part = int(current_serial[2:])
+        
+        # 숫자가 9999에 도달했는지 확인
+        if num_part >= 9999:
+            # 알파벳 증가
+            if alpha_part == 'ZZ':  # 최대값 도달
+                raise ValueError("더 이상 사용 가능한 serial number가 없습니다.")
+                
+            # 다음 알파벳 조합 생성
+            first_char = alpha_part[0]
+            second_char = alpha_part[1]
+            
+            if second_char == 'Z':
+                first_char = chr(ord(first_char) + 1)
+                second_char = 'A'
+            else:
+                second_char = chr(ord(second_char) + 1)
+                
+            alpha_part = first_char + second_char
+            num_part = 1
+        else:
+            num_part += 1
+            
+        return f"{alpha_part}{str(num_part).zfill(4)}"
 
 
-# 보기 모델 (Choice 모델과 Question 모델 1:1 관계)
 
-
-
+# 문제에 딸린 표 모델
 class QuestionTable(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='tables')
-    table_group = models.IntegerField('테이블 그룹', default=1)  # 발문1 또는 발문2에 대한 테이블
-    
-    table_type = models.CharField('표 유형', max_length=10, choices=[
-        ('CONDITION', '조건'),
-        ('EXAMPLE', '보기'),
-        ('SUMMARY', '요약문')
-    ])
     content = models.TextField('표 내용')
-
+    order = models.IntegerField('순서', default=1)
     
     class Meta:
         verbose_name = '문제 테이블'
         verbose_name_plural = '문제 테이블들'
-        ordering = ['table_group', 'table_type']
+        ordering = ['order']
         
-
+# 보기 모델 (Choice 모델과 Question 모델 1:1 관계)
 class Choice(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices')
-    choice_group = models.IntegerField('보기 그룹', default=1)  # 발문1 또는 발문2에 대한 보기
     choice_number = models.IntegerField('보기 번호')  # 1, 2, 3, 4, 5
     text_content = models.TextField('텍스트 내용')
     
     class Meta:
         verbose_name = '보기'
         verbose_name_plural = '보기들'
-        ordering = ['choice_group', 'choice_number']
-        unique_together = ['question', 'choice_group', 'choice_number']
+        ordering = ['choice_number']
+        unique_together = ['question', 'choice_number']
 
 
 ## 주관식 답안 작성란
 class AnswerField(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='answer_fields')
-    field_group = models.IntegerField('작성란 그룹', default=1)  # 발문1 또는 발문2에 대한 작성란
     text_format = models.TextField('작성란 형식')  # ex: "______", "(A): __________"
     
     class Meta:
         verbose_name = '답안 작성란'
         verbose_name_plural = '답안 작성란들'
-        ordering = ['field_group', 'id']
 
 
 
@@ -401,5 +445,16 @@ class OMRResult(models.Model):
         # student_name은 student가 있으면 student.name, 없으면 unmatched_student_name 사용(것도 없으면 미매칭)
         name = self.student.name if self.student else (self.unmatched_student_name or "미매칭")
         return f"{self.exam_identifier} - {name}"
+    
+    
+class PassageTable(models.Model):
+    passage = models.ForeignKey(Passage, on_delete=models.CASCADE, related_name='tables')
+    table_group = models.IntegerField('테이블 그룹', default=1)  # passage 밑의 테이블 순서
+    content = models.TextField('표 내용')
+    
+    class Meta:
+        verbose_name = '지문 테이블'
+        verbose_name_plural = '지문 테이블들'
+        ordering = ['table_group']
     
     

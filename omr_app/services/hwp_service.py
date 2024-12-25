@@ -15,11 +15,11 @@ class HwpProcessManager:
     @staticmethod
     def kill_hwp_processes():
         try:
-            for proc in psutil.process_iter():
+            for proc in psutil.process_iter(): # 실행중인 모든 프로그램 목록 순회
                 try:
-                    if proc.name().lower() in ['hwp.exe', 'hword.exe']:
-                        proc.kill()
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    if proc.name().lower() in ['hwp.exe', 'hword.exe']: # 프로그램 이름이 hwp.exe 또는 hword.exe인 경우
+                        proc.kill() # 프로그램 종료
+                except (psutil.NoSuchProcess, psutil.AccessDenied): # 프로그램이 없거나 접근 권한이 없는 경우
                     pass
         except Exception as e:
             print(f"HWP 프로세스 종료 중 오류: {e}")
