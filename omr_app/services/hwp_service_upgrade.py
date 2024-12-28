@@ -298,6 +298,17 @@ def convert_circled_number(text):
 
 
 def extract_source_from_index_text(index_text):
+    """_summary_
+    1) 인덱스 텍스트에서 '#' 제거, 
+    2) 일련번호가 있는 경우 제거
+    3) "-"을 기준으로 앞부분 출처 추출
+
+    Args:
+        index_text (str): 
+
+    Returns:
+        str: 추출된 출처 문자열
+    """
     # '#' 제거
     text = index_text.lstrip('#').strip()
     
@@ -661,24 +672,10 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
             "question_list": [
                 {
                     # 공통 필드
-                    "question_number": int,      # 문항 번호 (1부터 순차적으로 증가)
-                    "question_type": str or None,# 문제 유형 정보 (e.g. '주제', '어법')
-                    "is_essay": bool,            # True면 논술형 문제, False면 객관식 문제
-                    "score": float or None,      # 문제 배점(숫자), 없으면 None
-                    "question_text": str,        # 문제 발문 텍스트 (일반 텍스트)
+                    "question_number": int,       # 정렬 번호
                     "grading_number": str or int, # OMR 채점 시 사용되는 문제 식별용 번호
-                    
-                    # 객관식 전용 필드 (is_essay=False 인 경우)
-                    "grading_number": int,        # 객관식 문제 식별용 번호(문항 순서)
-                    "answer": list of int or None,# 정답(원문자 숫자), 예: [2]
-                    "explanation": str or None,   # 해설 텍스트
-                    "choice_list": [
-                        {
-                            "choice_number": int,   # 보기 번호(1~5)
-                            "choice_text": str      # 보기 텍스트(HTML 형태)
-                        },
-                        ...
-                    ],
+                    "question_type": str or None, # 문제 유형 정보 (e.g. '주제', '어법')
+                    "question_text": str,         # 문제 발문 텍스트 (일반 텍스트)
                     "question_table": [
                         # 문제 내에 존재하는 표가 있을 경우
                         # 각 표를 HTML 문자열로 저장
@@ -686,9 +683,27 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
                         ...
                     ] or []
                     
+                    "is_essay": bool,             # True면 논술형 문제, False면 객관식 문제
+                    "score": float or None,       # 문제 배점(숫자), 없으면 None
+                    
+                    
+                    
+                    
+                    # 객관식 전용 필드 (is_essay=False 인 경우)
+                    "grading_number": int,          # 객관식 문제 식별용 번호(문항 순서)
+                    "choice_list": [
+                        {
+                            "choice_number": int,   # 보기 번호(1~5)
+                            "choice_text": str      # 보기 텍스트(HTML 형태)
+                        },
+                        ...
+                    ],
+                    "answer": list of int or None,  # 정답(원문자 숫자), 예: [2]
+                    "explanation": str or None,     # 해설 텍스트
+                    
+                    
                     # 논술형 전용 필드 (is_essay=True 인 경우)
                     "answer_format": str or None, # 논술형 답안 형식 관련 텍스트(HTML)
-                    # 위에서와 같이 question_table 필드에 표가 있을 수 있음
                     # "answer" 필드: 논술형 답안(텍스트)
                     
                 },
@@ -700,53 +715,15 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
     ```
 
     즉, 최상위 반환 값은 'passage_dict_list'이며, 이 리스트는 여러 개의 'passage_dict'를 담는다.
-    각 'passage_dict'는 한 개의 지문(passage)과 해당 지문에 연결된 문제(question_list)를 포함한다.
-    
-    각 passage_dict 내 필드 설명:
-    - passage_number (int): 지문의 순번(1부터)
-    - passage_serial (str or None): 지문 일련번호 
-    - passage_source (str or None): 지문 출처에 대한 문자열
-    - is_double_question (bool): 해당 지문에 연결된 문제가 2문항인지(True) 1문항인지(False)
-    - passage_text (str): 지문 전체를 HTML 형태로 파싱한 텍스트
-    - passage_table (str or None): 지문 내에 포함된 표를 HTML로 추출한 문자열. 없거나 표가 없으면 None
-    - question_list (list): 이 지문에 연결된 문제들의 리스트. 보통 1개 또는 2개 문제.
-    
-    question_list 내 각 question_dict 설명:
-    - question_number (int): 문제번호(전체 문서에서 누적)
-    - question_type (str or None): 문제 유형(주제, 어휘, 어법 등)
-    - is_essay (bool): 논술형 문제 여부
-    - score (float or None): 문제 배점
-    - question_text (str): 문제 발문 텍스트 (HTML 제거한 순수 텍스트)
-    - grading_number (int or str): OMR 채점 시 사용되는 문제 식별용 번호
-    
-    - 만약 is_essay=False(객관식):
-      - answer (list of int): 정답 번호. 예: [2]이면 2번이 정답
-      - explanation (str or None): 해설 텍스트(줄바꿈 포함)
-      - choice_list (list): 보기 목록
-         각 보기(dict):
-           - choice_number (int): 보기 번호(1~5)
-           - choice_text (str): 보기 텍스트 (HTML 포함)
-      - question_table (list): 문제 내에 포함된 표(들). 각 표는 HTML 문자열.
-      
-    - 만약 is_essay=True(논술형):
-      - grading_number (str or int): 논술형 문제 식별용 정보
-      - answer_format (str or None): 논술형 문제의 답안 형식 관련 텍스트(HTML)
-      - answer (str): 논술형 문제의 답안 내용(HTML)
-      - question_table (list): 마찬가지로 문제 내 표들(HTML로 추출)
-
-    최종적으로 이 함수는 문서를 모두 분석한 뒤, 'passage_dict_list'를 반환한다.
     이를 통해 프론트엔드나 다른 로직에서 지문, 문제, 보기, 정답, 해설 등의 정보에 손쉽게 접근 가능하다.
     """
     hwp = None
     
     try:
-        pythoncom.CoInitialize()
-        print("===== DEBUG: Before creating hwp instance =====")
-
-        print("Type of hwp:", type(Hwp))
+        pythoncom.CoInitialize() # 한글 프로세스 초기화
+        # hwp_file_path = "G:\공유 드라이브\Workspace\omr_exam 테스트용.hwpx" 
+        # visible = True
         hwp = Hwp(visible=visible)
-        
-        print("===== DEBUG: After creating hwp instance =====")
         hwp.Open(hwp_file_path)
         hwp.Run("MoveDocBegin")
         
@@ -757,9 +734,9 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
         
         while search_text(hwp, "#"):
             passage_num += 1
-            
-            is_double_question = None
             passage_dict = {}
+
+            is_double_question = None
             
             # 인덱스 텍스트 추출 및 좌표 저장
             hwp.Run("MoveSelParaEnd")
@@ -773,29 +750,31 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
             detail_type_keywords = ['어법','어휘', '일치', '순서', '삽입', '제목', '주제', '요약', '빈칸', '함축', '영영풀이']            
             essay_type_keywords = ['논술형(어법)', '논술형(요약)', '논술형(영작)'] # 추후 수정 필요
 
-            type_texts = index_text.split(",")        
+            type_texts = index_text.split(",")
             question_type_list = []
             for type_text in type_texts:
                 # type_text = type_texts[0]
                 detail_type = None
                 # 논술형 먼저 파악
                 for keyword in essay_type_keywords:
+                    # keyword = essay_type_keywords[0]
                     if keyword in type_text:
                         detail_type = keyword
                         break
                 if detail_type is None:
                     for keyword in detail_type_keywords:
+                        # keyword = detail_type_keywords[1]
                         if keyword in type_text:
                             detail_type = keyword
                             break
                 question_type_list.append(detail_type)
 
 
-            # 일련번호 추출
+            # passage 일련번호가 있는 경우 추출
             index_text_split = index_text.split("]")
             passage_serial = index_text_split[0].split("[")[1] if len(index_text_split) > 1 else None
                 
-            # 출처 추출
+            # passage 출처 추출
             source = extract_source_from_index_text(index_text)
 
             

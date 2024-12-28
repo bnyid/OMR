@@ -18,13 +18,13 @@ from django.db.models.functions import Coalesce
 
 from .services.omr_service import process_pdf_and_extract_omr, extract_omr_data_from_image
 from .services.student_service import update_students
-from .services.hwp_service import extract_question_data, HwpProcessManager
+from .services.hwp_service import HwpProcessManager
 from .services.hwp_service_upgrade import extract_exam_sheet_data
 
 from .models import OMRResult, Student, ExamSheet, OriginalText
 from .models import (
     ExamSheet, ExamSheetQuestionMapping, 
-    Question, ExternalText, Choice, PassageTable, Passage, QuestionTable, AnswerField
+    Question, Choice,Passage, QuestionTable, AnswerField
 )
 
 
