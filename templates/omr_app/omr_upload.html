@@ -1,0 +1,468 @@
+<!-- omr_upload.html -->
+{% extends 'base.html' %} {% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card mb-3">
+      <div class="card-header">
+        <h3 class="card-title">OMR 답안지 업로드</h3>
+      </div>
+      <div class="card-body">
+        <form id="omrForm" enctype="multipart/form-data">
+          <div class="d-flex gap-2">
+            <div class="flex-grow-1">
+              <input
+                type="file"
+                id="file"
+                class="form-control"
+                name="file"
+                accept="application/pdf,image/*"
+                required
+              />
+            </div>
+            <button type="submit" class="btn btn-primary">처리하기</button>
+          </div>
+        </form>
+        <div id="result" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="text-end mb-3">
+  <button id="deleteBtn" class="btn btn-danger">OMR 삭제</button>
+  <button id="matchBtn" class="btn btn-warning">응시자 매칭</button>
+  <button id="finalSubmitBtn" class="btn btn-success">최종 제출</button>
+</div>
+<table id="omrTable" class="table table-striped table-bordered mt-3">
+  <thead>
+    <tr>
+      <th><input type="checkbox" id="selectAll" /></th>
+      <th class="text-center">시험일</th>
+      <th class="text-center">강사 코드</th>
+      <th class="text-center">매칭 상태</th>
+      <th class="text-center">학생코드</th>
+      <th class="text-center">학생이름</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<!-- 응시자 매칭 모달-->
+<div class="modal fade" id="studentMatchModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">응시자 매칭</h5>
+      </div>
+      <div class="modal-body">
+        <input
+          type="text"
+          id="studentSearchInput"
+          placeholder="이름/학번 검색"
+        />
+        <button id="studentSearchBtn">검색</button>
+        <table id="modalStudentListTable" class="table mt-2">
+          <thead>
+            <tr>
+              <th>선택</th>
+              <th>반</th>
+              <th>학번</th>
+              <th>이름</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button id="applyMatchBtn" class="btn btn-primary">매칭 적용</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 최종 제출 모달-->
+<div class="modal fade" id="finalOmrNameModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">시험명 입력</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">선택 기준</label>
+          <div class="d-flex gap-3">
+            <div>
+              <input
+                type="radio"
+                name="class_type"
+                value="class"
+                id="classTypeClass"
+              />
+              <label for="classTypeClass" class="fw-bold">소속반 기준</label>
+            </div>
+            <div>
+              <input
+                type="radio"
+                name="class_type"
+                value="school"
+                id="classTypeSchool"
+              />
+              <label for="classTypeSchool" class="fw-bold">학교반 기준</label>
+            </div>
+          </div>
+        </div>
+
+        <style>
+          .selection-container {
+            display: flex;
+            gap: 0.5rem;
+          }
+          .selection-box {
+            flex: 1;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            padding: 0.5rem;
+            transition: all 0.2s ease-in-out;
+          }
+          .selection-box.active {
+            border-color: #0d6efd;
+            background: #e7f1ff; /* 파란빛 배경 강조 */
+            opacity: 1;
+          }
+          .selection-box.inactive {
+            background: #f8f9fa;
+            opacity: 0.5;
+          }
+
+          select[disabled] {
+            background: #f8f9fa;
+            cursor: not-allowed;
+          }
+        </style>
+
+        <div class="mb-3">
+          <label class="form-label">반 선택</label>
+          <div class="selection-container">
+            <div class="selection-box inactive" id="classBox">
+              <select class="form-select" id="class_name_select" disabled>
+                <option value="">소속반 선택</option>
+                {% for cn in class_name_list %}
+                <option value="{{ cn }}">{{ cn }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="selection-box inactive" id="schoolBox">
+              <select
+                class="form-select"
+                id="class_name_by_school_select"
+                disabled
+              >
+                <option value="">학교반 선택</option>
+                {% for cns in class_name_by_school_list %}
+                <option value="{{ cns }}">{{ cns }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <small class="text-muted"
+            >위 라디오 버튼을 통해 소속반 기준 또는 학교반 기준 중 하나를
+            선택해주세요.</small
+          >
+        </div>
+
+        <div class="mb-3">
+          <label for="omrNameInput" class="form-label">OMR 이름</label>
+          <input
+            type="text"
+            id="omrNameInput"
+            placeholder="OMR 이름 입력"
+            class="form-control"
+          />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          취소
+        </button>
+        <button id="finalConfirmBtn" class="btn btn-success">제출</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 폼 제출 이벤트 핸들러
+  document.getElementById("omrForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const response = await fetch("{% url 'omr_app:omr_process' %}", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await response.json();
+    if (data.status === "success") {
+      renderOMRTable(data.data);
+    } else {
+      alert("오류 발생: " + data.message);
+    }
+  });
+
+  function renderOMRTable(omrList) {
+    window.omrResultsList = omrList;
+    const tbody = document.querySelector("#omrTable tbody");
+    tbody.innerHTML = "";
+    omrList.forEach((omr, idx) => {
+      const matchStatus = omr.is_matched
+        ? "매칭완료"
+        : "<span style='color:red;'>응시자 매칭 필요</span>";
+
+      const row = document.createElement("tr");
+      row.dataset.index = idx;
+      row.innerHTML = `
+        <td><input type="checkbox" class="rowCheck"></td>
+        <td>${omr.exam_date}</td>
+        <td>${omr.teacher_code}</td>
+        <td>${matchStatus}</td>
+        <td>${omr.student_code || ""}</td>
+        <td>${omr.student_name || ""}</td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    sortUnmatchedFirst();
+  }
+
+  function sortUnmatchedFirst() {
+    const tbody = document.querySelector("#omrTable tbody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+
+    rows.sort((a, b) => {
+      const aNeedsMatching = a
+        .querySelector("td:nth-child(4)")
+        .textContent.includes("매칭 필요");
+      const bNeedsMatching = b
+        .querySelector("td:nth-child(4)")
+        .textContent.includes("매칭 필요");
+      if (aNeedsMatching === bNeedsMatching) return 0;
+      return aNeedsMatching ? -1 : 1;
+    });
+
+    rows.forEach((r) => tbody.appendChild(r));
+  }
+
+  document.getElementById("deleteBtn").addEventListener("click", () => {
+    if (!confirm("선택한 항목을 삭제하시겠습니까?")) {
+      return;
+    }
+
+    const selectedRows = getSelectedRows("omrTable");
+    selectedRows.forEach((tr) => {
+      const idx = parseInt(tr.dataset.index);
+      window.omrResultsList[idx] = null;
+      tr.remove();
+    });
+
+    window.omrResultsList = window.omrResultsList.filter((el) => el !== null);
+  });
+
+  document.getElementById("matchBtn").addEventListener("click", () => {
+    const selectedRows = getSelectedRows("omrTable");
+    if (selectedRows.length === 0) {
+      alert("매칭할 행을 선택하세요.");
+      return;
+    }
+    if (selectedRows.length > 1) {
+      alert("응시자 매칭은 1명씩 가능합니다.");
+      return;
+    }
+    const studentMatchModal = new bootstrap.Modal(
+      document.getElementById("studentMatchModal")
+    );
+    studentMatchModal.show();
+  });
+
+  function getSelectedRows(tableId) {
+    const CHECKBOX_CLASS = "rowCheck";
+    return Array.from(document.querySelectorAll(`#${tableId} tbody tr`)).filter(
+      (tr) => tr.querySelector(`.${CHECKBOX_CLASS}`).checked
+    );
+  }
+
+  document
+    .getElementById("studentSearchBtn")
+    .addEventListener("click", async () => {
+      const query = document.getElementById("studentSearchInput").value;
+      const resp = await fetch(
+        "{% url 'student_app:student_search' %}?q=" + encodeURIComponent(query)
+      );
+      const data = await resp.json();
+      const tbody = document.querySelector("#modalStudentListTable tbody");
+      tbody.innerHTML = "";
+      data.forEach((st) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+        <td><input type="radio" name="selectedStudent" value="${
+          st.id
+        }" data-name="${st.name}" data-code="${st.student_code}"></td>
+        <td>${st.class_name || ""}</td>
+        <td>${st.student_code}</td>
+        <td>${st.name}</td>
+      `;
+        tbody.appendChild(row);
+      });
+    });
+
+  document.getElementById("applyMatchBtn").addEventListener("click", () => {
+    const selectedStudentRadio = document.querySelector(
+      "input[name='selectedStudent']:checked"
+    );
+    if (!selectedStudentRadio) {
+      alert("학생을 선택하세요.");
+      return;
+    }
+    const student_id = selectedStudentRadio.value;
+    const student_name = selectedStudentRadio.dataset.name;
+    const student_code = selectedStudentRadio.dataset.code || null;
+
+    const selectedRows = getSelectedRows("omrTable");
+    selectedRows.forEach((tr) => {
+      tr.querySelector("td:nth-child(4)").innerHTML = "매칭완료";
+      tr.querySelector("td:nth-child(5)").textContent = student_code || "";
+      tr.querySelector("td:nth-child(6)").textContent = student_name;
+
+      const idx = parseInt(tr.dataset.index);
+      window.omrResultsList[idx].is_matched = true;
+      window.omrResultsList[idx].student_id = student_id;
+      window.omrResultsList[idx].student_code = student_code;
+      window.omrResultsList[idx].student_name = student_name;
+    });
+
+    const studentMatchModal = bootstrap.Modal.getInstance(
+      document.getElementById("studentMatchModal")
+    );
+    studentMatchModal.hide();
+  });
+
+  document.getElementById("finalSubmitBtn").addEventListener("click", () => {
+    const modal = new bootstrap.Modal(
+      document.getElementById("finalOmrNameModal")
+    );
+    modal.show();
+  });
+
+  // 라디오 선택 상태에 따른 UI 업데이트
+  const classSelect = document.getElementById("class_name_select");
+  const classBySchoolSelect = document.getElementById(
+    "class_name_by_school_select"
+  );
+  const classTypeClass = document.getElementById("classTypeClass");
+  const classTypeSchool = document.getElementById("classTypeSchool");
+  const classBox = document.getElementById("classBox");
+  const schoolBox = document.getElementById("schoolBox");
+
+  function updateDropdownState() {
+    if (classTypeClass.checked) {
+      // 소속반 기준 활성화
+      classSelect.disabled = false;
+      classBySchoolSelect.disabled = true;
+
+      classBox.classList.remove("inactive");
+      classBox.classList.add("active");
+      schoolBox.classList.remove("active");
+      schoolBox.classList.add("inactive");
+    } else if (classTypeSchool.checked) {
+      // 학교반 기준 활성화
+      classSelect.disabled = true;
+      classBySchoolSelect.disabled = false;
+
+      schoolBox.classList.remove("inactive");
+      schoolBox.classList.add("active");
+      classBox.classList.remove("active");
+      classBox.classList.add("inactive");
+    } else {
+      // 아무 것도 선택 안 된 경우(초기상태)
+      classSelect.disabled = true;
+      classBySchoolSelect.disabled = true;
+
+      classBox.classList.remove("active");
+      classBox.classList.add("inactive");
+      schoolBox.classList.remove("active");
+      schoolBox.classList.add("inactive");
+    }
+  }
+
+  classTypeClass.addEventListener("change", updateDropdownState);
+  classTypeSchool.addEventListener("change", updateDropdownState);
+  updateDropdownState(); // 초기상태 설정
+
+  // 최종 제출
+  document
+    .getElementById("finalConfirmBtn")
+    .addEventListener("click", async () => {
+      const omrName = document.getElementById("omrNameInput").value.trim();
+      const isClassTypeSelected =
+        classTypeClass.checked || classTypeSchool.checked;
+
+      if (!isClassTypeSelected) {
+        alert("소속반 기준 또는 학교반 기준을 선택해주세요.");
+        return;
+      }
+
+      let finalClassName = "";
+      if (classTypeClass.checked) {
+        finalClassName = classSelect.value.trim();
+        if (!finalClassName) {
+          alert("소속반을 선택하세요.");
+          return;
+        }
+      } else {
+        finalClassName = classBySchoolSelect.value.trim();
+        if (!finalClassName) {
+          alert("학교반을 선택하세요.");
+          return;
+        }
+      }
+
+      if (!omrName) {
+        alert("OMR 이름을 입력하세요.");
+        return;
+      }
+
+      const omrDataArray = window.omrResultsList.map((data) => ({
+        exam_date: data.exam_date,
+        teacher_code: data.teacher_code,
+        is_matched: data.is_matched,
+        student_id: data.student_id,
+        student_code: data.student_code,
+        student_name: data.student_name,
+        answers: data.answers,
+      }));
+
+      const response = await fetch("{% url 'omr_app:finalize' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          class_name: finalClassName,
+          omr_name: omrName,
+          omr_data: omrDataArray,
+        }),
+      });
+
+      const resData = await response.json();
+      if (resData.status === "success") {
+        alert("최종 제출 완료!");
+        window.location.href = resData.redirect_url;
+      } else {
+        alert("오류 발생: " + resData.message);
+      }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,723 @@
+<!-- upload_exam_sheet.html -->
+{% extends "base.html" %} {% block content %}
+<style>
+  /* 모달 크기 확장 */
+  .modal-xxl {
+    max-width: 1400px;
+  }
+
+  /* 모달 높이 제한 및 스크롤 */
+  .modal-body {
+    max-height: 75vh; /* 가로 대비 높이비율 ex) 80vh = 80% */
+    overflow-y: auto; /* 내용이 넘치면 자동으로 */
+  }
+
+  .review-row {
+    display: flex;
+    gap: 20px;
+  }
+
+  .review-col {
+    flex: 1;
+  }
+
+  .review-section {
+    margin-bottom: 15px;
+  }
+
+  .review-section hr {
+    margin-top: 20px;
+    margin-bottom: 20px;
+  }
+
+  .modal-header-nav button {
+    margin: 0 5px;
+  }
+
+  .question-separator {
+    border-top: 2px solid #ddd;
+    margin: 20px 0;
+  }
+
+  .editable-box {
+    border: 1px solid #ccc;
+    padding: 5px;
+    min-height: 30px;
+    background: #fff;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .editable-box p,
+  .editable-box div {
+    margin: 0;
+    padding: 0;
+    line-height: normal;
+  }
+
+  /* choices layout */
+  .choice-line {
+    display: flex;
+    align-items: start;
+    gap: 8px;
+    margin-bottom: 5px;
+  }
+
+  .choice-line .editable-box {
+    flex: 1;
+  }
+
+  .choice-label {
+    min-width: 20px;
+    height: 20px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    margin-top: 5px;
+  }
+</style>
+
+<div class="row justify-content-center">
+  <div class="col-md-12">
+    <div class="card mb-3">
+      <div
+        class="card-header d-flex justify-content-between align-items-center"
+      >
+        <h3 class="card-title mb-0">시험지 업로드</h3>
+      </div>
+      <div class="card-body">
+        <form id="examUploadForm" enctype="multipart/form-data" method="post">
+          {% csrf_token %}
+          <div class="d-flex gap-2">
+            <div class="flex-grow-1">
+              <input
+                type="file"
+                id="hwp_file"
+                class="form-control"
+                name="hwp_file"
+                accept=".hwp,.hwpx"
+                required
+              />
+            </div>
+            <button type="submit" class="btn btn-primary">처리하기</button>
+          </div>
+        </form>
+        <div id="uploadStatus" class="mt-3"></div>
+        <!-- 업로드 상태 표시 추후 구현 예정-->
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="text-end mb-3">
+  <button id="reviewBtn" class="btn btn-secondary me-2">검토</button>
+  <button id="finalSubmitBtn" class="btn btn-success">최종 제출</button>
+</div>
+
+<!-- 업로드 결과 테이블 -->
+<table id="examTable" class="table table-bordered mt-3">
+  <thead>
+    <tr>
+      <th class="text-center">p_num</th>
+      <th class="text-center">p_seri</th>
+      <th class="text-center">p_source</th>
+      <th class="text-center">o_num</th>
+      <th class="text-center">q_num</th>
+      <th class="text-center">q_type</th>
+      <th class="text-center">q_score</th>
+      <th class="text-center">ans</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- ################ 여기에 function renderExamTable 의 tbody 추가 ################ -->
+  </tbody>
+</table>
+
+<!-- 검토 모달 -->
+<div class="modal fade" id="reviewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xxl">
+    <div class="modal-content">
+      <!-- 모달 헤더 -->
+      <div class="modal-header modal-header-nav position-relative">
+        <!-- postion_relative는 postion_absolute의 기준이 됨-->
+        <div
+          class="d-flex align-items-center gap-2 position-absolute start-50 translate-middle-x"
+        >
+          <!-- start-50 : 시작점에서 50% 이동, translate-middle-x : 자신의 너비의 50%만큼(=middle) X축으로 이동-->
+          <button id="prevPassageBtn" class="btn btn-outline-primary btn-sm">
+            ◀
+          </button>
+          <h5 id="modalTitle" class="modal-title mb-0"></h5>
+          <!-- mb-0 : margin-bottom 0 -->
+          <button id="nextPassageBtn" class="btn btn-outline-primary btn-sm">
+            ▶
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+        <!-- modal-header 클래스는 기본적으로 space-between 적용이므로 두번쨰 요소인 이 버튼은 오른쪽 끝에 위치함 -->
+      </div>
+
+      <!-- 모달 바디 -->
+      <div class="modal-body">
+        <!-- 컨텐츠 영역: 3열 레이아웃 -->
+        <div class="d-flex gap-4 review-section">
+          <!-- 1열 -->
+          <div class="review-col">
+            <!-- 원문출처 & is_double -->
+            <div class="d-flex gap-2">
+              <div class="flex-grow-1">
+                <label>원문</label>
+                <input
+                  type="text"
+                  id="reviewSource"
+                  class="form-control form-control-sm"
+                />
+              </div>
+              <div class="flex-grow-0">
+                <label>is_double</label>
+                <input
+                  type="text"
+                  id="reviewDouble"
+                  class="form-control form-control-sm"
+                  readonly
+                />
+              </div>
+            </div>
+
+            <!-- passage_text & passage_table -->
+            <div>
+              <label>passage_text (HTML)</label>
+              <div
+                id="reviewPassageText"
+                class="editable-box"
+                contenteditable="true"
+              ></div>
+            </div>
+          </div>
+
+          <!-- 2열 -->
+          <div class="review-col">
+            <div class="review-section" id="questionBlock1">
+              <!-- 문제 번호 -->
+              <h6 id="questionNumber1"></h6>
+
+              <!-- question_text -->
+              <div class="mb-2">
+                <label>question_text</label>
+                <div
+                  id="questionText1"
+                  class="editable-box"
+                  contenteditable="true"
+                ></div>
+              </div>
+
+              <!-- question_text_extra -->
+              <div class="mb-2">
+                <label>question_text_extra</label>
+                <div
+                  id="questionTextExtra1"
+                  class="editable-box"
+                  contenteditable="true"
+                ></div>
+              </div>
+
+              <!-- q_choices -->
+              <div class="mb-2">
+                <label>q_choices</label>
+                <div id="questionChoices1">
+                  <!-- 여기에 동적으로 choices들을 append -->
+                </div>
+              </div>
+
+              <!-- 정답 -->
+              <h6>정답</h6>
+              <div class="mb-2">
+                <label>answer</label>
+                <div id="answer1" class="editable-box" contenteditable="true">
+                  <!-- 여기에 동적으로 answer를 append -->
+                </div>
+              </div>
+
+              <!-- explanation -->
+              <div class="mb-2">
+                <label>해설</label>
+                <div
+                  id="explanation1"
+                  class="editable-box"
+                  contenteditable="true"
+                >
+                  <!-- 여기에 동적으로 explanation을 append -->
+                </div>
+              </div>
+
+              <!-- answer_format -->
+              <div class="mb-2">
+                <label>주관식 작성란</label>
+                <div
+                  id="answerFormat1"
+                  style="border: 1px solid #ccc; padding: 5px; min-height: 20px"
+                >
+                  <!-- 여기에 동적으로 answer_format을 append -->
+                </div>
+              </div>
+            </div>
+
+            <!-- 3열 -->
+            <div class="review-col">
+              <div class="review-section" id="questionBlock2">
+                <!-- 문제 번호 -->
+                <h6 id="questionNumber2"></h6>
+
+                <!-- question_text -->
+                <div class="mb-2">
+                  <label>question_text</label>
+                  <div
+                    id="questionText2"
+                    class="editable-box"
+                    contenteditable="true"
+                  ></div>
+                </div>
+
+                <!-- question_text_extra -->
+                <div class="mb-2">
+                  <label>question_text_extra</label>
+                  <div
+                    id="questionTextExtra2"
+                    class="editable-box"
+                    contenteditable="true"
+                  ></div>
+                </div>
+
+                <!-- q_choices -->
+                <div class="mb-2">
+                  <label>q_choices</label>
+                  <div id="questionChoices2">
+                    <!-- 여기에 동적으로 choices들을 append -->
+                  </div>
+                </div>
+
+                <!-- 정답 -->
+                <h6>정답</h6>
+                <div class="mb-2">
+                  <label>answer</label>
+                  <div id="answer2" class="editable-box" contenteditable="true">
+                    <!-- 여기에 동적으로 answer를 append -->
+                  </div>
+                </div>
+
+                <!-- explanation -->
+                <div class="mb-2">
+                  <label>해설</label>
+                  <div
+                    id="explanation2"
+                    class="editable-box"
+                    contenteditable="true"
+                  ></div>
+                </div>
+
+                <!-- answer_format -->
+                <div class="mb-2">
+                  <label>주관식 작성란</label>
+                  <div
+                    id="answerFormat2"
+                    style="
+                      border: 1px solid #ccc;
+                      padding: 5px;
+                      min-height: 20px;
+                    "
+                  >
+                    <!-- 동적으로 작성란(div 등)을 append 할 예정 -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Container end -->
+      </div>
+      <!-- Modal body end -->
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          닫기
+        </button>
+        <button id="saveReviewChangesBtn" class="btn btn-primary">
+          변경사항 저장
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 최종 제출 모달 -->
+<div
+  class="modal fade"
+  id="finalExamNameModal"
+  tabindex="-1"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <!-- 모달 헤더 -->
+      <div class="modal-header">
+        <h5 class="modal-title">시험명 입력</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+
+      <!-- 모달 바디 -->
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="examNameInput" class="form-label">시험명</label>
+          <input
+            type="text"
+            id="examNameInput"
+            placeholder="시험 이름 입력"
+            class="form-control"
+          />
+        </div>
+      </div>
+
+      <!-- 모달 푸터 -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          취소
+        </button>
+        <button id="finalConfirmBtn" class="btn btn-success">제출</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let extractedData = null;
+  let currentPassageIndex = 0;
+
+  document
+    .getElementById("examUploadForm")
+    .addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const response = await fetch("{% url 'exam_app:upload_exam' %}", {
+        method: "POST",
+        body: formData, // formData는 파일을 포함한 데이터를 전송하는 객체, django에서 request.FILES['hwp_file']로 받음 (name=hwp_file 이므로)
+      });
+
+      const passages = await response.json();
+      if (passages.status === "success") {
+        extractedData = passages.data;
+        renderExamTable(extractedData);
+      } else {
+        alert("오류 발생: " + passages.message);
+      }
+    });
+
+  function renderExamTable(passages) {
+    const tbody = document.querySelector("#examTable tbody"); // tbody 선택
+    tbody.innerHTML = ""; // 테이블 초기화
+
+    passages.forEach((passage) => {
+      // 반복문 시작
+      // 각 데이터 변수 세팅
+      const passageNumber = passage.passage_number || "";
+      const passageSerial = passage.passage_serial || "";
+      const passageSource = passage.passage_source || "";
+      const isDouble = passage.is_double_question ? "True" : "False";
+      const isRegistered = passage.is_registered ? "True" : "False";
+      const passageText = passage.passage_text || "";
+
+      // question list는 1개 또는 2개
+      const questionList = passage.question_list || [];
+      questionList.forEach((question, qIndex) => {
+        const rowSpan = isDouble ? "rowspan=2" : "";
+        const multiRowClass = isDouble ? "multi-row-cell" : "";
+
+        const questionNumber = question.question_number || "";
+        const gradingNumber = question.grading_number || "";
+        const questionType = question.question_type || "";
+        const questionScore = question.score || "입력필요";
+        const ans = question.answer || "";
+
+        const tr = document.createElement("tr");
+
+        // 전반부 열들은 첫번째 순회에서만 셀을 만듬
+        if (qIndex === 0) {
+          tr.innerHTML += `
+            <td class="text-center align-middle ${multiRowClass}" ${rowSpan}>${passageNumber}</td> // p_num
+            <td class="text-center align-middle ${multiRowClass}" ${rowSpan}>${passageSerial}</td> // p_serial
+            <td class="text-center align-middle ${multiRowClass}" ${rowSpan}>${passageSource}</td> // p_source
+          `;
+        }
+        // 후반부 열들은 분기될 수 있음
+        tr.innerHTML += `
+          <td class="text-center align-middle">${questionNumber}</td>
+          <td class="text-center align-middle">${gradingNumber}</td>
+          <td class="text-center align-middle">${questionType}</td>
+          <td class="text-center align-middle">${questionScore}</td>
+          <td class="text-center align-middle">${ans}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  // 검토 버튼
+  document.getElementById("reviewBtn").addEventListener("click", () => {
+    if (!extractedData || extractedData.length === 0) {
+      alert("먼저 시험지를 업로드해주세요.");
+      return;
+    }
+    currentPassageIndex = 0;
+    showPassageInReviewModal(currentPassageIndex);
+    const modal = new bootstrap.Modal(document.getElementById("reviewModal"));
+    modal.show();
+  });
+
+  // 검토 모달 코드 시작
+  // 왼쪽 화살표 버튼
+  document.getElementById("prevPassageBtn").addEventListener("click", () => {
+    if (!extractedData) return;
+    if (currentPassageIndex > 0) {
+      saveCurrentModalChanges(); // 넘어가기 전 현재 passage_index의 변경사항을 저장
+      prevPassageIndex = currentPassageIndex - 1;
+      showPassageInReviewModal(prevPassageIndex);
+    }
+  });
+
+  // 오른쪽 화살표 버튼
+  document.getElementById("nextPassageBtn").addEventListener("click", () => {
+    if (!extractedData) return;
+    if (currentPassageIndex < extractedData.length - 1) {
+      saveCurrentModalChanges();
+      nextPassageIndex = currentPassageIndex + 1;
+      showPassageInReviewModal(nextPassageIndex);
+    }
+  });
+
+  // 각 지문별 내용 세팅
+  function showPassageInReviewModal(index) {
+    const passage = extractedData[index];
+
+    // modal title 세팅
+    const modalTitle = document.getElementById("modalTitle");
+    modalTitle.textContent = `지문 ${passage.passage_number}`; // h1~h6 태그에 입력할 땐 .textContent로 접근(이거는 HTML태그가 문자그대로 노출됨)
+
+    // 1열 정보 세팅
+    // 원문출처 & is_double
+    document.getElementById("reviewSource").value = // input 태그에 입력할 땐 .value로 접근
+      passage.passage_source || "";
+    document.getElementById("reviewDouble").value = passage.is_double_question
+      ? "True"
+      : "False";
+
+    // passage_text
+    document.getElementById("reviewPassageText").innerHTML = //innerHTML은 html서식을 적용하여 입력할 때 사용
+      passage.passage_text || "";
+
+    // 문제 세팅 준비
+    const questionList = passage.question_list || [];
+
+    // 첫번 째 문제 (=2열)
+    questionList[0]
+      ? showQuestionToUI(questionList[0], 1) // 두 번째 arg는 첫번쨰, 두번째문제를 나타냄
+      : console.error(`${passage.passage_number}번 지문에 문제가 없음`);
+
+    // 두번 째 문제 (=3열)
+    questionList[1] ? showQuestionToUI(questionList[1], 2) : clearQuestionUI(2);
+  }
+
+  // 각 지문별 문제 세팅
+  function showQuestionToUI(question, idx) {
+    document.getElementById(`questionNumber${idx}`).textContent = `${
+      question.is_essay ? "논술형 " : "객관식 "
+    }문제 ${question.question_number}`;
+
+    // question_text
+    document.getElementById(`questionText${idx}`).innerHTML =
+      question.question_text || "";
+
+    // question_text_extra
+    document.getElementById(`questionTextExtra${idx}`).innerHTML =
+      question.question_text_extra || "";
+
+    // choices (객관식일 때만 표시)
+    const choicesContainer = document.getElementById(`questionChoices${idx}`);
+    if (!question.is_essay) {
+      choicesContainer.style.display = "block"; // 태그 안의 속성에 접근할 때 '.속성명' 사용
+      choicesContainer.innerHTML = "";
+      const allChoices = question.choice_list || [];
+      for (let i = 0; i < 5; i++) {
+        // 자바스크립트 for 문 구조, for(첫번째 순회시에만 실행 ; for문 순회 조건문 ; 각 반복문 끝날때마다 수행)
+        const choice_text = allChoices[i] ? allChoices[i].choice_text : "";
+
+        // choice번호 choice_text를 담는 한줄 div
+        const choiceLine = document.createElement("div");
+        choiceLine.classList.add("choice-line"); // choiceLine요소에 접근하여 choice_line 클래스 추가
+
+        // choice번호 라벨
+        const choiceLabel = document.createElement("div");
+        choiceLabel.classList.add("choice-label"); // choice-label 클래스 적용
+        choiceLabel.textContent = (i + 1).toString();
+
+        // 번호와 choice_text를 담는 div
+        const choiceBox = document.createElement("div");
+        choiceBox.classList.add("editable-box");
+        choiceBox.setAttribute("contenteditable", "true");
+        choiceBox.innerHTML = choice_text;
+
+        choiceLine.appendChild(choiceLabel);
+        choiceLine.appendChild(choiceBox);
+        choicesContainer.appendChild(choiceLine);
+      }
+    }
+
+    // answer
+    document.getElementById(`answer${idx}`).innerHTML =
+      question.answer !== undefined ? question.answer : "";
+
+    // explanation (객관식일 때만 표시)
+    const explanationElement = document.getElementById(`explanation${idx}`);
+    if (!question.is_essay) {
+      explanationElement.style.display = "block";
+      explanationElement.innerHTML = question.explanation || "";
+    } else {
+      explanationElement.style.display = "none";
+    }
+
+    // answer_format
+    const answerFormatElement = document.getElementById(`answerFormat${idx}`);
+    if (answerFormatElement) {
+      answerFormatElement.innerHTML = question.answer_format || "";
+    } else {
+      answerFormatElement.style.display = "none";
+    }
+  }
+
+  function clearQuestionUI(idx) {
+    document.getElementById(`questionNumber${idx}`).textContent = "";
+    document.getElementById(`questionText${idx}`).innerHTML = "";
+    document.getElementById(`questionTextExtra${idx}`).innerHTML = "";
+    document.getElementById(`questionChoices${idx}`).innerHTML = "";
+    document.getElementById(`answer${idx}`).innerHTML = "";
+    document.getElementById(`explanation${idx}`).innerHTML = "";
+    document.getElementById(`answerFormat${idx}`).innerHTML = "";
+  }
+
+  // 검토 모달에서 passage를 이동할 때나, 검토모달을 종료할 때 현재의 passage_number의 변경사항을 저장함
+  function saveCurrentModalChanges() {
+    const passage = extractedData[currentPassageIndex];
+
+    // passage_source
+    passage.passage_source = document
+      .getElementById("reviewSource")
+      .value.trim();
+
+    // passage_text
+    passage.passage_text =
+      document.getElementById("reviewPassageText").innerHTML;
+    const passageTableElem = document.getElementById("reviewPassageTable");
+
+    // question 관련 변경사항 저장
+    const questionList = passage.question_list || [];
+    if (questionList[0]) {
+      getQuestionFromUI(questionList[0], 1);
+    }
+    if (questionList[1]) {
+      getQuestionFromUI(questionList[1], 2);
+    }
+  }
+
+  function getQuestionFromUI(question, idx) {
+    // question_text
+    question.question_text = document.getElementById(
+      `questionText${idx}`
+    ).innerHTML;
+
+    // question_text_extra
+    const qTextExtra = document.getElementById(
+      `questionTextExtra${idx}`
+    ).innerHTML;
+    question.question_text_extra = qTextExtra;
+
+    // choices
+    const choicesContainer = document.getElementById(`questionChoices${idx}`);
+    const choiceLines = choicesContainer.querySelectorAll(
+      ".choice-line .editable-box"
+    );
+    question.choice_list = [];
+    choiceLines.forEach((choiceBox) => {
+      question.choice_list.push({ choice_text: choiceBox.innerHTML });
+    });
+
+    // answer
+    question.answer = document.getElementById(`answer${idx}`).innerHTML;
+    // explanation
+    question.explanation = document.getElementById(
+      `explanation${idx}`
+    ).innerHTML;
+
+    // answer_format
+    question.answer_format = document.getElementById(
+      `answerFormat${idx}`
+    ).innerHTML;
+  }
+
+  document
+    .getElementById("saveReviewChangesBtn")
+    .addEventListener("click", () => {
+      saveCurrentModalChanges();
+      alert("변경사항이 저장되었습니다. (단, 실제 서버 반영은 최종 제출 시)");
+    });
+
+  document.getElementById("finalSubmitBtn").addEventListener("click", () => {
+    const modal = new bootstrap.Modal(
+      document.getElementById("finalExamNameModal")
+    );
+    modal.show();
+  });
+
+  document
+    .getElementById("finalConfirmBtn")
+    .addEventListener("click", async () => {
+      const examName = document.getElementById("examNameInput").value.trim();
+      if (!examName) {
+        alert("시험명을 입력해주세요.");
+        return;
+      }
+
+      const response = await fetch("{% url 'exam_app:finalize_exam' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          exam_name: examName,
+          data: extractedData,
+        }),
+      });
+
+      const resData = await response.json();
+      if (resData.status === "success") {
+        alert("시험지 등록 완료!");
+        window.location.href = resData.redirect_url;
+      } else {
+        alert("오류 발생: " + resData.message);
+      }
+    });
+</script>
+{% endblock %}
