@@ -91,37 +91,37 @@ def extract_number_from_text(text):
     return None
 
 def extract_detail_type(type_texts):
-                """
-                인덱스 텍스트(#)에서 세부 유형 리스트를 최대 2개 추출
-                
-                Args:
-                    type_texts (list): 유형 텍스트 리스트
+    """
+    인덱스 텍스트(#)에서 세부 유형 리스트를 최대 2개 추출
+    
+    Args:
+        type_texts (list): 유형 텍스트 리스트
                     
                 Returns:
-                    list: 추출된 세부 유형 리스트(최대 2개)
-                """
+        list: 추출된 세부 유형 리스트(최대 2개)
+    """
                 
-                detail_type_keywords = ['어법','어휘', '일치', '순서', '삽입', '제목', '주제', '요약', '빈칸', '함축', '영영풀이']            
-                essay_type_keywords = ['논술형(어법)', '논술형(요약)', '논술형(영작)'] # 추후 수정 필요
-                
-                question_type_list = []
-                detail_type = None
-                for type_text in type_texts:
-                    # 논술형 먼저 파악
-                    for keyword in essay_type_keywords:
-                        # keyword = essay_type_keywords[0]
-                        if keyword in type_text:
-                            detail_type = keyword
-                            break
-                    # 논술형에서 세부유형이 없으면 객관식 세부유형 파악
-                    if detail_type is None:
-                        for keyword in detail_type_keywords:
-                            # keyword = detail_type_keywords[1]
-                            if keyword in type_text:
-                                detail_type = keyword
-                                break
-                    question_type_list.append(detail_type)
-                return question_type_list
+    detail_type_keywords = ['어법','어휘', '일치', '순서', '삽입', '제목', '주제', '요약', '빈칸', '함축', '영영풀이']            
+    essay_type_keywords = ['논술형(어법)', '논술형(요약)', '논술형(영작)'] # 추후 수정 필요
+    
+    question_type_list = []
+    detail_type = None
+    for type_text in type_texts:
+        # 논술형 먼저 파악
+        for keyword in essay_type_keywords:
+            # keyword = essay_type_keywords[0]
+            if keyword in type_text:
+                detail_type = keyword
+                break
+        # 논술형에서 세부유형이 없으면 객관식 세부유형 파악
+        if detail_type is None:
+            for keyword in detail_type_keywords:
+                # keyword = detail_type_keywords[1]
+                if keyword in type_text:
+                    detail_type = keyword
+                    break
+        question_type_list.append(detail_type)
+    return question_type_list
 
 # 검색
 def search_text(hwp, text,direction="Forward"):
@@ -518,60 +518,56 @@ def extract_html_text_from_block(hwp):
 
     return result
 
+
 ##################################################################################################################################
 
-def extract_exam_sheet_data(hwp_file_path,visible=True):
+def extract_exam_sheet_info(hwp_file_path,visible=False):
     """
     한글(HWP) 문서를 분석하여 시험지 정보를 추출하는 함수.
     
-    주어진 한글 파일(hwp_file_path)을 열어 텍스트, 표, 보기(객관식), 논술형 답안 등의 정보를
-    구조화된 형태의 리스트로 반환한다. 이 함수는 다음과 같은 구조를 가진 JSON 유사 파이썬 객체를 반환한다.
-
+    주어진 한글 파일(hwp_file_path)을 열어, 문서 내 각 문항의 정보와 답안을 추출하여 
+    문항별 정보를 담은 사전(dict)들의 리스트를 반환한다.
+    
+    Parameters:
+        hwp_file_path (str):
+            분석할 한글 파일의 전체 경로.
+        visible (bool, optional):
+            한글 문서의 창을 실제로 띄울지 여부. True인 경우 창이 표시되며, 기본값은 True.
+    
     Returns:
-        list of dict: passage_dict_list
-
-    반환되는 전체 구조(passsage_dict_list)는 다음과 같다:
-    ``` 
-    [
-        {
-            "passage_number": int,           # 지문 번호(1부터 시작)
-            "passage_serial": str or None,   # 지문 일련번호 예: "A1", "B20322" / 없을 경우 None
-            "passage_source": str or None,   # 지문 출처 문자열, 없으면 None
-            "is_double_question": bool,      # 더블(2문항)인지 싱글(1문항)인지 표시
-            "is_registered": bool,       # 문제 등록 제외 여부
-            "passage_text": str,             # 추출된 지문 본문 텍스트 (HTML, 표도 포함)
+        list of dict:
+            추출된 문항 정보가 담긴 사전들의 리스트. 각 사전은 하나의 문항에 대한 정보를 포함하며,
+            반환되는 사전은 다음과 같은 키를 가진다.
             
-            "question_list": [
-                {
-                    # 공통 필드
-                    "order_number": int,                 # 정렬 번호
-                    "is_essay": bool,                    # True면 논술형 문제, False면 객관식 문제
-                    "question_number": int,               # OMR 채점 시 사용되는 문제 식별용 번호
-                    "question_type": str or None,        # 문제 유형 정보 (e.g. '주제', '어법')
-                    "question_text": str,                # 문제 발문 텍스트 (non-HTML)
-                    "question_text_extra": str or None,  # 발문 텍스트 이후 추가 텍스트,표 등 (HTML)
-                    "score": float or int or None,       # 문제 배점(숫자), 없으면 None
-                    "answer": list of int or str or None,  # 객관식의 경우 [2], [3], ..., 주관식인 경우 str
-                    
-                    # 객관식 전용 필드 (is_essay=False 인 경우)
-                    "choice_list": [
-                        {
-                            "choice_number": int,     # 보기 번호(1~5)
-                            "choice_text": str        # 보기 텍스트(HTML 형태)
-                        },
-                        ...
-                    ],
-                    "explanation": str or None,       # 해설 텍스트
-                       
-                    # 논술형 전용 필드 (is_essay=True)
-                    "answer_format": str or None,     # 논술형 답안 형식 관련 텍스트(HTML)
-                },
-            ]
-        },
-    ]
-
-    즉, 최상위 반환 값은 'passage_dict_list'이며, 이 리스트는 여러 개의 'passage_dict'를 담는다.
-    이를 통해 프론트엔드나 다른 로직에서 지문, 문제, 보기, 정답, 해설 등의 정보에 손쉽게 접근 가능하다.
+            +------------------+----------------------+---------------------------------------------------------------+
+            | Key              | Type                 | Description                                                   |
+            +------------------+----------------------+---------------------------------------------------------------+
+            | order_number     | int                  | 전체 문항 중 해당 문항의 순번 (문항이 처리된 순서대로 증가하는 번호)   |
+            | multi_or_essay   | str                  | 문항의 유형: "객관식" 또는 "논술형"                              |
+            | number           | int                  | 해당 유형 내 문항 번호 (예: 객관식 문제면 multi_num, 논술형 문제면 essay_num)|
+            | detail_type      | str                  | 문항의 세부 유형. 인덱스 텍스트에서 추출된 값으로, 예: "어법", "논술형(어법)" 등 |
+            | question_text    | str                  | 문항의 본문 텍스트                                             |
+            | answer           | str                  | 문항의 정답 텍스트                                             |
+            | score            | int or float         | 문항에 부여된 점수. 추출된 점수 텍스트를 숫자형으로 변환한 값              |
+            +------------------+----------------------+---------------------------------------------------------------+
+    
+    Raises:
+        Exception:
+            한글 파일을 열거나 문서 내 정보를 추출하는 과정 중 문제가 발생할 경우 예외를 발생시킨다.
+    
+    Notes:
+        - 이 함수는 한컴오피스 한글의 COM 인터페이스를 활용하여 문서를 조작 및 분석한다.
+        - 문서 내 특정 마커(예: "#", "##", "*", "{\d점}", "{\d\.\d점}")를 기준으로 각 영역을
+          추출하여 문항 정보에 포함시킨다.
+        - 추출된 문항 정보는 문서 내 출현 순서에 따라 order_number가 증가하며, 각 문항별로
+          객관식과 논술형의 번호를 별도로 관리한다.
+        - 함수 내부에서 사용된 보조 함수들(extract_text_from_block, search_text, go_to_index 등)은
+          문서 내 특정 영역의 텍스트 추출 및 위치 이동을 담당한다.
+    
+    Example:
+        >>> exam_info = extract_exam_sheet_info("C:/path/to/exam_sheet.hwpx", visible=False)
+        >>> for question in exam_info:
+        ...     print(question['order_number'], question['multi_or_essay'], question['number'])
     """
     hwp = None
     
@@ -588,13 +584,12 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
         passage_num = 0
         order_num = 0
         multi_num = 0
-        passage_dict_list = []
+        essay_num = 0
+        question_dict_list = []
         
         while search_text(hwp, "#"):
+            question_dict = {}
             passage_num += 1
-            passage_dict = {}
-
-            is_double_question = None
             
             # 인덱스 텍스트 추출 및 좌표 저장
             hwp.Run("MoveSelParaEnd")
@@ -603,337 +598,79 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
             hwp.Run("MoveParaEnd")
             index_end_coordinate = hwp.GetPos() # 좌표
             
-            # is_registered
-            is_registered = not ("$" in index_text)
-
             # question_type_list 추출 (콤마(,)기준)
             type_texts = index_text.split(",")
             question_type_list = extract_detail_type(type_texts)
-
-            # passage 일련번호가 있는 경우 추출
-            index_text_split = index_text.split("]")
-            passage_serial = index_text_split[0].split("[")[1] if len(index_text_split) > 1 else None
                 
-            
             # passage 출처 추출
             source = extract_source_from_index_text(index_text)
-
             
-            # 더블/싱글 유형판단
-            is_double_question = True if "##" in index_text else False
-            
-            passage_dict.update({
-                'passage_number': passage_num,
-                'passage_serial': passage_serial,
-                'passage_source': source,
-                'is_double_question': is_double_question,
-                'is_registered': is_registered
-            })
-
-            question_dict_list = []
-            # double passage인 경우 passage_text 좌표 추출
-            if is_double_question:
-                search_text(hwp, "]")
-                hwp.Run("MoveParaEnd")
-                search_text(hwp, "*")
-                hwp.Run("MoveLeft")
-                hwp.Run("MoveRight")
-                passage_start_coor = hwp.GetPos()
-                
+            # 더블/싱글 문제 처리
+            question_count = 2 if "##" in index_text else 1
+            for i in range(question_count):
+                # 문단번호로 이동
                 go_to_index(hwp)
-                hwp.Run("MovePrevParaEnd")
-                passage_end_coor = hwp.GetPos()
-            # Single passage인 경우 passage_text 좌표 추출
-            else:
-                go_to_index(hwp)
-                hwp.Run("MoveParaEnd")
-                search_text(hwp, "*")
-                hwp.Run("CloseEx")
-                hwp.Run("MoveLineBegin")
-                passage_start_coor = hwp.GetPos()
+                start_coor = hwp.GetPos()
                 
-                if "논술" in index_text:
-                    search_text(hwp, "[*답안]")
-                    hwp.Run("MoveLeft")
-                    hwp.Run("MoveRight")
-                    passage_end_coor = hwp.GetPos()
-                
+                # HEADSTRING 추출 후 논술/객관식 판단
+                headstring = hwp.GetHeadingString()
+                if "논술" in headstring:
+                    multi_or_essay = "논술형"
+                    essay_num += 1
+                    number = essay_num
                 else:
-                    search_circled_number(hwp, 1)
-                    hwp.Run("MovePrevParaEnd")
-                    passage_end_coor = hwp.GetPos()
-            
-                
-            # passage_text
-            hwp.SetPos(*passage_start_coor)
-            hwp.Select()
-            hwp.SetPos(*passage_end_coor)
-            
-            passage_text = extract_html_text_from_block(hwp) if has_content_in_block(hwp) else ''
-            passage_dict['passage_text'] = passage_text
-            pprint(passage_text)
-            
-            # 인덱스 텍스트 끝으로 이동
-            hwp.Cancel()
-            hwp.SetPos(*index_end_coordinate)
-        
-            # is_double_question이 True이면 2회 반복, False이면 1회 반복
-            question_count = 2 if is_double_question else 1
-            question_dict_list = []
-            for i in range(question_count): 
-                question_dict = {}
-                order_num += 1
-                
-                # 샾(#)의 갯수와 comma(,)의 갯수 오류를 확인, question_type 추출
-                try:
-                    question_type = question_type_list[i] 
-                except IndexError:
-                    error_msg = "오류 : 파일의 #의 갯수 또는 comma(,)의 갯수가 맞는지 점검하세요."
-                    print(error_msg)
-                    question_type = None
-                    raise ValueError(error_msg)
+                    multi_or_essay = "객관식"
+                    multi_num += 1
+                    number = multi_num
 
-                # question_text
-                go_to_index(hwp) # 발문으로 이동
                 hwp.Run("MoveSelParaEnd")
                 question_text = extract_text_from_block(hwp)
                 
-                # headstring & is_essay
-                headstring = hwp.GetHeadingString()
-                is_essay = True if "논술" in headstring else False
-
                 # score
                 search_text_condition(hwp, r"{\d점}|{\d\.\d점}")
                 score_text = extract_text_from_block(hwp)
                 score = extract_number_from_text(score_text)
                 
                 
-                # 객관식/논술형 공통 필드 업데이트
-                question_dict.update({
-                    'order_number': order_num,
-                    'question_type': question_type,
-                    'is_essay': is_essay,
-                    'score': score,
-                    'question_text': question_text,
-                })
-                
-                # 발문 끝점 좌표 저장
-                hwp.Run("MoveParaEnd")
-                question_text_end_coor = hwp.GetPos()
-                                
-                # 객관식 : answer, explanation, question_text_extra, choice_list
-                if not is_essay:
-                    multi_num +=1
-                    question_dict.update({
-                        'question_number': multi_num
-                    })
-                    hwp.SetPos(*question_text_end_coor)
+                # answer
+                if multi_or_essay == "객관식":
+                    # answer(객관식)
                     hwp.Run("MoveParaBegin")
                     hwp.Run("MoveSelParaEnd")
-                    
-                    # answer
                     enter_note(hwp)
                     search_text(hwp, "*")
                     hwp.Run("MoveSelParaEnd")
                     answer_text = extract_text_from_block(hwp)
                     answer_num = convert_circled_number(answer_text)
-                    
-                    hwp.Run("MoveRight")
-                    hwp.Run("MoveLeft")
-                    
-                                        
-                    # explanation
-                    hwp.Run("Select")
-                    while True:
-                        place_1 = hwp.GetPos()
-                        para_num = place_1[1]
-                        hwp.Run("MoveNextParaBegin")
-                        place_2 = hwp.GetPos()
-                        if para_num == place_2[1]:
-                            break
-
-                    explanation_text = extract_html_text_from_block(hwp)
-                    
                     hwp.Run("CloseEx")
                     hwp.Run("MoveParaEnd")
                     
-                    question_dict.update({
-                        'answer': answer_num,
-                        'explanation': explanation_text
-                    })
-                    
-                    
-                    # 보기 또는 답안 시작점 좌표 저장
-                    search_circled_number(hwp, 1)
-                    choice_start_coor = hwp.GetPos()
-
-                    question_text_extra = ""
-                    # 더블 문제인 경우 text_extra 추출
-                    if is_double_question:
-                        # 발문과 보기 사이 범위 블럭
-                        hwp.SetPos(*question_text_end_coor)
-                        hwp.Select()
-                        hwp.SetPos(*choice_start_coor)
-                    
-                        # question_text_extra
-                        question_text_extra = ""
-                        if has_content_in_block(hwp):
-                            question_text_extra = extract_html_text_from_block(hwp)
-                            
-                        question_dict.update({
-                            'question_text_extra': question_text_extra
-                        })
-                        hwp.Cancel()
-                    # choice_list
-                    hwp.SetPos(*choice_start_coor)
-                    choice_list = []
-                    for choice_number in range(1,6):
-                        # choice_number = 1
-                        search_circled_number(hwp, choice_number)
-                        hwp.Run("MoveRight")
-                        choice_num_coor = hwp.GetPos()
-                        
-                        if choice_number < 5:
-                            search_circled_number(hwp, choice_number+1)
-                            search_text(hwp, "*",direction="Backward")
-                            hwp.Run("MoveRight")
-                            hwp.Run("MoveLeft")
-                            
-
-                        elif choice_number == 5:
-                            if go_to_faster_question(hwp, "#"):
-                                search_text(hwp, "*",direction="Backward")
-                                hwp.Run("MoveRight")
-                                hwp.Run("MoveLeft")
-                                
-                            else:
-                                search_text(hwp, "확인사항")
-                                hwp.Run("CloseEx")
-                                hwp.Run("CloseEx")
-                                hwp.Run("MoveLeft")
-                                hwp.Run("MoveLeft")
-                                search_text(hwp, "*",direction="Backward")
-                                hwp.Run("MoveRight")
-                                hwp.Run("MoveLeft")
-                                
-                        choice_num_plus_coor = hwp.GetPos()
-                        
-                        hwp.SetPos(*choice_num_coor)
-                        hwp.Select()
-                        hwp.SetPos(*choice_num_plus_coor)
-                        choice_text = extract_html_text_from_block(hwp)
-                        hwp.Cancel()
-                        
-                        
-                        choice_dict = {
-                            'choice_number': choice_number,
-                            'choice_text': choice_text
-                        }
-                        
-                        choice_list.append(choice_dict)
-                        
-                    question_dict.update({
-                        'choice_list': choice_list
-                    })
-                    # question_text(발문으로) 이동
-                    hwp.Cancel()
-
-                    question_dict_list.append(question_dict)
-                    
-                # 논술형 : answer, answer_format, question_text_extra
-                elif is_essay:
-                    essay_num = extract_number_from_text(headstring)
-                    question_dict.update({
-                        'question_number': essay_num
-                    })
-                    
-                    # 답안 작성 시작점 좌표 저장
-                    if search_text(hwp, "*답안"):
-                        hwp.Run("MoveLeft")
-                        hwp.Run("MoveRight")
-                    else:
-                        raise Exception(f"주관식 {essay_num}번 이후로 [답안] 문자를 확인하세요.")
-                    
-                    answer_format_start_coor = hwp.GetPos()
-                    
-                    # question_text_extra 있는지 확인
-                    question_text_extra = ""
-                    if is_double_question:
-                        hwp.SetPos(*question_text_end_coor)
-                        hwp.Select()
-                        hwp.SetPos(*answer_format_start_coor)
-                        if has_content_in_block(hwp):
-                            question_text_extra = extract_html_text_from_block(hwp)
-                        
-                        question_dict.update({
-                            'question_text_extra': question_text_extra
-                        })
-                        hwp.Cancel()
-                        
-                    # 답안 format 끝점 추출
-                    if go_to_faster_question(hwp, "#"):
-                        search_text(hwp, "*",direction="Backward")
-                        hwp.Run("CloseEx")
-                        hwp.Run("MoveLineEnd")
-                        answer_format_end_coor = hwp.GetPos()
-                    elif search_text(hwp, "확인사항"):
-                        hwp.Run("CloseEx")
-                        hwp.Run("MoveLeft")
-                        search_text(hwp, "*",direction="Backward")
-                        hwp.Run("MoveRight")
-                        hwp.Run("MoveLeft")
-                        answer_format_end_coor = hwp.GetPos()
-                    else:
-                        raise Exception(f"주관식 {essay_num}번 이후로, 다음 문제 '#'이 없거나 문제 끝에 '확인사항' 문자를 찾지 못해 주관식 답안 작성란의 끝을 찾지 못했습니다.")
-                    
-                    
-                    hwp.SetPos(*answer_format_start_coor)
-                    hwp.Select()
-                    hwp.SetPos(*answer_format_end_coor)
-
-                    # answer_format
-                    answer_format = extract_html_text_from_block(hwp)
-                    hwp.Cancel()
-                    
-                    # 답안 추출
+                elif multi_or_essay == "논술형":
+                    # answer(논술형)
                     hwp.Run("MoveDocEnd")
-                    search_text(hwp, headstring, direction="Backward")
-                    hwp.Run("MoveNextParaBegin")
-                    answer_start_coor = hwp.GetPos()
-                    
-                    go_to_faster_word(hwp, "[논술","<객관")
-                    search_text(hwp, "*",direction="Backward")
-                    hwp.Run("CloseEx")
-                    hwp.Run("MoveLineEnd")
-                    answer_end_coor = hwp.GetPos()
-                    
-                    hwp.SetPos(*answer_start_coor)
-                    hwp.Select()
-                    hwp.SetPos(*answer_end_coor)
-                    
-                    answer_text = extract_html_text_from_block(hwp)
-                    hwp.Cancel()
-
-                    question_dict.update({
-                        'answer_format': answer_format,
-                        'answer': answer_text,
-                        'question_text_extra': question_text_extra
-                    })
-                    
-                    question_dict_list.append(question_dict)
-                    
-                    hwp.SetPos(*question_text_end_coor)
-                    
-
-                hwp.Cancel()
-            
-            passage_dict.update({
-                'question_list': question_dict_list
-            })
+                    search_text(hwp, f"{headstring}_정답", direction="Backward")
+                    hwp.Run("TableCellBlock")
+                    hwp.Run("TableLowerCell")
+                    answer_text = extract_text_from_block(hwp)
+                    hwp.Run("Cancel")
+                                
+                order_num += 1
+                question_dict.update({
+                    'order_number': order_num,
+                    'multi_or_essay': multi_or_essay,
+                    'number': number,
+                    'detail_type': question_type_list[i],
+                    'question_text': question_text,
+                    'answer': answer_text,
+                    'score': score,
+                })
+                question_dict_list.append(question_dict)
                 
-            passage_dict_list.append(passage_dict)
-            
-        pprint(passage_dict_list)
+                hwp.SetPos(*start_coor)
+                hwp.Run("MoveParaEnd")        
+            hwp.SetPos(*index_end_coordinate)
+        pprint(question_dict_list,sort_dicts=False)
+        
     except Exception as e:
         traceback.print_exc()
         print(f"에러 발생: {e}")
@@ -942,4 +679,4 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
     finally:
         HwpProcessManager.safe_hwp_quit(hwp)
 
-    return passage_dict_list
+    return question_dict_list

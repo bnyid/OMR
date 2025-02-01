@@ -13,8 +13,7 @@ from django.conf import settings
 import json
 
 from apps.exam_app.models import OriginalText, Passage, Question, Choice, ExamSheet, ExamSheetQuestionMapping
-from apps.exam_app.services import extract_exam_sheet_data
-
+from apps.exam_app.services import extract_exam_sheet_info
 
 def upload_exam_sheet(request):
     """시험지 업로드 페이지를 렌더링"""
@@ -36,11 +35,11 @@ def upload_exam(request):
                 for chunk in hwp_file.chunks():
                     destination.write(chunk)
                     
-            exam_sheet_data = extract_exam_sheet_data(temp_path,visible=False)
+            question_dict_list = extract_exam_sheet_info(temp_path,visible=False)
             
             return JsonResponse({
                 'status': 'success',
-                'data': exam_sheet_data
+                'data': question_dict_list
             })
             
         except Exception as e:
@@ -55,118 +54,104 @@ def upload_exam(request):
                 os.remove(temp_path)
             HwpProcessManager.kill_hwp_processes()
 
-
 @require_POST
 def finalize_exam(request):
     """
-    1) 시험지(ExamSheet) 생성
-    2) 지문(OriginalText/ExternalText) 생성
-    3) 문제(Question) 생성
-    4) ExamSheetQuestionMapping 생성
-    5) 필요한 경우, Choice(보기) 생성
+    시험지를 최종 등록하는 뷰.
+    
+    1) 클라이언트에서 전달한 JSON 데이터에서 exam_name과 문제 데이터(extractedData)를 파싱합니다.
+    2) exam_name을 이용하여 ExamSheet 객체를 생성합니다.
+    3) 전달받은 문제 데이터를 순회하며 각 문제에 대해 Question 객체를 생성하고,
+       해당 시험지(ExamSheet)에 연결합니다.
+    
+    예상 input JSON 구조:
+    
+        {
+            "exam_name": "중간고사",
+            "data": [
+                {
+                    "order_number": 1,
+                    "multi_or_essay": "객관식",
+                    "number": 1,
+                    "detail_type": "어법",
+                    "question_text": "문제 내용...",
+                    "answer": "정답",
+                    "score": 2,
+                },
+                {
+                    "order_number": 2,
+                    "multi_or_essay": "논술형",
+                    "number": 1,
+                    "detail_type": "논술형(요약)",
+                    "question_text": "다른 문제 내용...",
+                    "answer": "정답",
+                    "score": 5
+                },
+                ...
+            ]
+        }
+    
+    Returns:
+        JsonResponse: 성공 시 redirect_url을 포함한 JSON 응답,
+                      실패 시 에러 메시지를 포함한 JSON 응답.
     """
     try:
-        # 1) 요청 데이터 파싱
-        body = json.loads(request.body) # json데이터를 파싱하여 딕셔너리로 변환함.
-        exam_name = body.get("exam_name")  # 사용자가 입력한 시험명
-        extracted_data = body.get("data", [])  # 지문/문제 추출 결과
-        print("[Debug] finalize_exam / extracted_data =", json.dumps(extracted_data, indent=2, ensure_ascii=False))
+        # request.body 는 bytes 타입이므로 decode 후 파싱
+        data = json.loads(request.body.decode('utf-8'))
+        exam_name = data.get("exam_name")
+        question_data_list = data.get("data", [])
 
-        if not exam_name or not extracted_data:
+        if not exam_name:
             return JsonResponse({
-                'status': 'error', 
-                'message': '시험지 이름이 없거나, 문제 데이터가 없습니다.'
+                "status": "error",
+                "message": "시험명이 전달되지 않았습니다."
             }, status=400)
 
-        # 2) ExamSheet 생성
-        with transaction.atomic():  # DB 트랜잭션 보장
+        # 데이터 정합성 검사: 문제 데이터가 없으면 오류
+        if not question_data_list:
+            return JsonResponse({
+                "status": "error",
+                "message": "문제 데이터가 존재하지 않습니다."
+            }, status=400)
+
+        # 트랜잭션 내에서 시험지와 문제들을 생성
+        with transaction.atomic():
+            # ExamSheet 생성 (total_questions는 question_data_list의 길이)
             exam_sheet = ExamSheet.objects.create(
                 title=exam_name,
-                total_questions=0  # 일단 0으로 저장 후, 이후에 업데이트
+                total_questions=len(question_data_list)
             )
-
-            total_question_count = 0  # 누적 문항수
-
-            # 3) extracted_data(지문들) 반복 처리
-            for passage_dict in extracted_data:
-                
-                # 1) Passage 생성
-                passage_obj = Passage.objects.create(
-                    passage_source=passage_dict.get("passage_source",''), # 예: "고2 23년 6월 39번"
-                    passage_text=passage_dict.get("passage_text", ''),
+            
+            # 각 문제 생성
+            question_instances = []
+            for qd in question_data_list:
+                question_instance = Question(
+                    exam_sheet=exam_sheet,
+                    order_number=qd.get("order_number"),
+                    multi_or_essay=qd.get("multi_or_essay"),
+                    number=qd.get("number"),
+                    detail_type=qd.get("detail_type"),
+                    question_text=qd.get("question_text"),
+                    answer=qd.get("answer"),
+                    score=qd.get("score")
                 )
-                
-                # 2) question_list 순회
-                question_list = passage_dict.get("question_list", [])
-                for q_dict in question_list:
-                    total_question_count += 1 # 누적 문항수 증가
-                    is_essay = q_dict.get("is_essay") # 논술형 여부
-                    q_type   = q_dict.get("question_type")    # "어법", "빈칸", "논술형(어법)" 등
-                    answer   = q_dict.get("answer")
-                    explanation   = q_dict.get("explanation", "")
-                    q_text        = q_dict.get("question_text")
-                    q_text_extra  = q_dict.get("question_text_extra", "")
-                    
-                    print(f"[Debug] 문항 {total_question_count} - is_essay={is_essay}, q_type={q_dict.get('question_type')}")
-
-                    
-                    # 공통 필드 설정
-                    question_obj = Question.objects.create(
-                        passage=passage_obj,  # 새로 만든 passage 연결
-                        detail_type=Question.HWP_MAPPING_TO_DETAIL_TYPE.get(q_type, None),
-                        answer=answer,
-                        question_text=q_text,
-                        question_text_extra=q_text_extra,
-                        is_essay=is_essay,
-                    )
-                    
-                    print(f"[Debug] DB에 저장된 question_obj.id={question_obj.id}, is_essay={question_obj.is_essay}")
-                    
-                    # 객관식인 경우 Choice 객체연결 및 explanation 필드 설정
-                    choice_list = q_dict.get("choice_list", [])
-                    if not is_essay and choice_list:
-                        for idx, choice_obj in enumerate(choice_list, start=1):
-                            Choice.objects.create(
-                                question=question_obj,
-                                choice_number=idx,
-                                text_content=choice_obj.get('choice_text', "")
-                            )
-                        question_obj.explanation = explanation
-                        question_obj.save()
-                    
-                    # 주관식인 경우 answer_format 필드 설정
-                    answer_format = q_dict.get("answer_format", "")
-                    if is_essay and answer_format:
-                        question_obj.answer_format = answer_format
-                        question_obj.save()
-                    
-
-                    # 시험지 - 문제 매핑
-                    question_number = q_dict.get("question_number") or total_question_count # 문서 내 문항번호가 없으면 누적 문항수로 매핑
-                    ExamSheetQuestionMapping.objects.create(
-                        exam_sheet=exam_sheet,
-                        question=question_obj,
-                        question_number=question_number,
-                        order_number=total_question_count
-                    )
-                    
-            # (모든 passage 처리 후) total_questions 갯수 업데이트
-            exam_sheet.total_questions = total_question_count
-            exam_sheet.save()
-
-        # 모든 등록 성공 시
+                question_instances.append(question_instance)
+            
+            # bulk_create 로 한 번에 저장
+            Question.objects.bulk_create(question_instances)
+        
+        # 성공 응답: 등록된 시험지의 detail page URL 등을 함께 리턴 가능
         return JsonResponse({
-            'status': 'success', 
-            'redirect_url': reverse('exam_app:exam_sheet_list')
+            "status": "success",
+            "redirect_url": f"/exam_app/exam_sheet/{exam_sheet.id}/"  # 실제 URL에 맞게 조정
         })
-    except ValidationError as e:
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     
     except Exception as e:
+        # 에러 발생 시 traceback 을 기록하는 등의 처리를 할 수 있음
         return JsonResponse({
-            'status': 'error',
-            'message': str(e)
-        }, status=400)
+            "status": "error",
+            "message": str(e)
+        }, status=500)
         
         
         
