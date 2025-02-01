@@ -1,11 +1,13 @@
+# apps/exam_app/views.py
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-
-
+from apps.exam_app.services.hwp_services import HwpProcessManager
 from django.db import transaction
 from django.core.exceptions import ValidationError
-
+from django.shortcuts import get_object_or_404
+from django.db.models import Count, Q
+from django.urls import reverse
 import os
 from django.conf import settings
 import json
@@ -68,6 +70,7 @@ def finalize_exam(request):
         body = json.loads(request.body) # json데이터를 파싱하여 딕셔너리로 변환함.
         exam_name = body.get("exam_name")  # 사용자가 입력한 시험명
         extracted_data = body.get("data", [])  # 지문/문제 추출 결과
+        print("[Debug] finalize_exam / extracted_data =", json.dumps(extracted_data, indent=2, ensure_ascii=False))
 
         if not exam_name or not extracted_data:
             return JsonResponse({
@@ -104,7 +107,8 @@ def finalize_exam(request):
                     q_text        = q_dict.get("question_text")
                     q_text_extra  = q_dict.get("question_text_extra", "")
                     
-                    
+                    print(f"[Debug] 문항 {total_question_count} - is_essay={is_essay}, q_type={q_dict.get('question_type')}")
+
                     
                     # 공통 필드 설정
                     question_obj = Question.objects.create(
@@ -113,7 +117,10 @@ def finalize_exam(request):
                         answer=answer,
                         question_text=q_text,
                         question_text_extra=q_text_extra,
+                        is_essay=is_essay,
                     )
+                    
+                    print(f"[Debug] DB에 저장된 question_obj.id={question_obj.id}, is_essay={question_obj.is_essay}")
                     
                     # 객관식인 경우 Choice 객체연결 및 explanation 필드 설정
                     choice_list = q_dict.get("choice_list", [])
@@ -150,7 +157,7 @@ def finalize_exam(request):
         # 모든 등록 성공 시
         return JsonResponse({
             'status': 'success', 
-            'redirect_url': '/omr_app/exam-sheet/list'  # 혹은 원하는 URL
+            'redirect_url': reverse('exam_app:exam_sheet_list')
         })
     except ValidationError as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
@@ -160,3 +167,117 @@ def finalize_exam(request):
             'status': 'error',
             'message': str(e)
         }, status=400)
+        
+        
+        
+def exam_sheet_list(request):
+    """
+    - exam_sheets: 각 시험지의
+       1) objective_count: 객관식 문제 수
+       2) essay_count: 논술형 문제 수
+       3) omr_count: 연결된 OMR 결과 수
+         (여기서는 예시로 "OMRResult" 모델의 related_name이 'omrresults' 라고 가정)
+    - 정렬은 "OMR=0개"인 시험지가 위, 나머지는 최근 생성 순
+      (Case/When 이용 or 다른 로직)
+    """
+
+    # 예: 필드가 Question에 is_essay가 있으므로, 집계방식은 다음과 같이 가능
+    exam_sheets = (ExamSheet.objects
+        .annotate(
+            # 객관식 문제(is_essay=False) 수
+            objective_count=Count('questions', filter=Q(questions__is_essay=False)),
+            # 논술형 문제(is_essay=True) 수
+            essay_count=Count('questions', filter=Q(questions__is_essay=True)),
+            omr_count=Count('omr_results', distinct=True), # related_name='omr_results'
+        )
+    )
+
+    # 정렬 규칙: OMR=0개 → 위쪽, 이후 created_at DESC
+    from django.db.models import Case, When, IntegerField
+    exam_sheets = exam_sheets.annotate(
+        zero_flag=Case(
+            When(omr_count=0, then=0),
+            default=1,
+            output_field=IntegerField()
+        )
+    ).order_by('zero_flag', '-created_at')
+
+    return render(request, 'exam_app/exam_sheet_list.html', {
+        'exam_sheets': exam_sheets,
+    })
+
+
+def exam_sheet_detail(request, pk):
+    exam_sheet = get_object_or_404(ExamSheet, pk=pk)
+
+    passages = Passage.objects.filter(questions__exam_sheets=exam_sheet).distinct()
+
+    passage_list = []
+    
+    for passage in passages:
+        # passage에 연결된 question(현재 exam_sheet에 속한 것만)
+        q_list = passage.questions.filter(exam_sheets=exam_sheet).order_by('id')
+        # 만약 2문항인지(is_double) 여부를 구분하고 싶다면:
+        is_double = (q_list.count() == 2)
+        print(f"[Debug] passage.id={passage.id}, passage.passage_source={passage.passage_source}, q_list.count={q_list.count()}")
+        # 여기서 question 정보를 좀 더 가공해서, 
+        # choices도 가져온 뒤 list로 넣어준다
+        question_data_list = []
+        passage_label_list = []    
+        for q in q_list:
+            
+            label = None
+            question_number = ExamSheetQuestionMapping.objects.get(question=q).question_number
+            if q.is_essay:
+                label = f"논술형{question_number}"
+            else: 
+                label = question_number
+                
+            passage_label_list.append(label)
+            
+            
+            choices = q.choices.all().order_by('choice_number')  # 객체 리스트
+            # 필요한 데이터를 dict로 만들어 append
+            question_data_list.append({
+                'question_text': q.question_text,
+                'question_text_extra': q.question_text_extra,
+                'question_is_essay': q.is_essay,
+                'question_number': question_number,
+                'answer': q.answer,               # 객관식 [2], 주관식 str
+                'explanation': q.explanation,     # 객관식 해설
+                'answer_format': q.answer_format, # 논술형 답안형식
+                'choices': choices,               # 객체 리스트
+            })
+
+        passage_list.append({
+            'passage': passage,
+            'question_list': question_data_list,
+            'is_double': is_double,
+            'passage_label_list': passage_label_list,
+        })
+
+    context = {
+        'exam_sheet': exam_sheet,
+        'passage_list': passage_list,
+    }
+    return render(request, 'exam_app/exam_sheet_detail.html', context)
+    
+    
+def exam_sheet_bulk_delete(request):
+    """
+    - POST 요청으로 넘어온 sheet_ids(JSON)들을 받아 일괄 삭제
+    - 예시 코드
+    """
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            sheet_ids = data.get('sheet_ids', [])
+            if not sheet_ids:
+                return JsonResponse({'status': 'error', 'message': 'No IDs provided.'})
+
+            ExamSheet.objects.filter(id__in=sheet_ids).delete()
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)})
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Invalid request method.'})

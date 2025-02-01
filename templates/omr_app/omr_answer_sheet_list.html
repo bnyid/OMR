@@ -1,4 +1,5 @@
 {% extends 'base.html' %} {% block content %} {% load custom_filters %}
+
 <style>
   .table th,
   .table td {
@@ -7,17 +8,14 @@
     white-space: nowrap;
     padding: 0.5rem;
   }
-
   .table thead th {
     background-color: #f8f9fa;
   }
-
   .btn-sm {
     padding: 0.25rem 0.5rem;
     font-size: 0.875rem;
     line-height: 1.2;
   }
-
   .section-title {
     display: flex;
     justify-content: space-between;
@@ -27,12 +25,9 @@
   .section-title h2 {
     margin: 0;
   }
-
   .card {
     margin-bottom: 2rem;
   }
-
-  /* 활성화된 탭 버튼 스타일 */
   .tab-btn {
     margin-right: 0.5rem;
     padding: 0.5rem 1rem;
@@ -43,21 +38,18 @@
     color: #333;
     text-decoration: none;
   }
-
   .tab-btn.active {
     background: #0d6efd;
     color: #fff;
     border-color: #0d6efd;
   }
-
   .table-container {
     margin-top: 1rem;
   }
-
-  /* 우측 상단 버튼 컨테이너 */
   .actions-container {
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
     margin-bottom: 0.5rem;
   }
 </style>
@@ -69,20 +61,25 @@
 <!-- 탭 버튼 -->
 <div>
   <a href="javascript:void(0)" id="unmatchedBtn" class="tab-btn active"
-    >unmatched</a
+    >미매칭</a
   >
-  <a href="javascript:void(0)" id="matchedBtn" class="tab-btn">matched</a>
+  <a href="javascript:void(0)" id="matchedBtn" class="tab-btn">매칭완료</a>
 </div>
 
-<!-- 테이블 컨테이너들 -->
+<!-- 미매칭 시험지 -->
 <div class="table-container" id="unmatchedContainer">
   <div class="actions-container">
+    <!-- (1) 삭제 버튼 -->
     <button
       type="button"
       class="btn btn-sm btn-danger"
       id="deleteSelectedUnmatched"
     >
       삭제
+    </button>
+    <!-- (2) 매칭 & 채점 버튼 -->
+    <button type="button" class="btn btn-sm btn-warning" id="matchAndGradeBtn">
+      매칭 & 채점
     </button>
   </div>
   <div class="card">
@@ -125,13 +122,14 @@
               <a
                 href="{% url 'omr_app:omr_result_detail_grouped' group.exam_identifier %}"
                 class="btn btn-sm btn-info"
-                >상세</a
               >
+                상세
+              </a>
             </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7" class="text-center text-muted">
+            <td colspan="8" class="text-center text-muted">
               미매칭된 시험지가 없습니다.
             </td>
           </tr>
@@ -142,8 +140,10 @@
   </div>
 </div>
 
+<!-- 매칭 완료 시험지 -->
 <div class="table-container" id="matchedContainer" style="display: none">
   <div class="actions-container">
+    <!-- 삭제 버튼 -->
     <button
       type="button"
       class="btn btn-sm btn-danger"
@@ -151,6 +151,7 @@
     >
       삭제
     </button>
+    <!-- (주의) 여긴 이미 채점이 끝났다고 가정 → 별도 버튼 없음 -->
   </div>
   <div class="card">
     <div class="card-header bg-success bg-opacity-25">
@@ -192,13 +193,14 @@
               <a
                 href="{% url 'omr_app:omr_result_detail_grouped' group.exam_identifier %}"
                 class="btn btn-sm btn-info"
-                >상세</a
               >
+                상세
+              </a>
             </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7" class="text-center text-muted">
+            <td colspan="8" class="text-center text-muted">
               매칭된 시험지가 없습니다.
             </td>
           </tr>
@@ -210,6 +212,7 @@
 </div>
 
 <script>
+  // 탭 전환 로직
   const unmatchedBtn = document.getElementById("unmatchedBtn");
   const matchedBtn = document.getElementById("matchedBtn");
   const unmatchedContainer = document.getElementById("unmatchedContainer");
@@ -229,7 +232,7 @@
     unmatchedBtn.classList.remove("active");
   });
 
-  // 전체 선택 체크박스: 미매칭
+  // 전체선택 체크박스
   document
     .getElementById("selectAllUnmatched")
     .addEventListener("change", function () {
@@ -238,8 +241,6 @@
       );
       checkboxes.forEach((cb) => (cb.checked = this.checked));
     });
-
-  // 전체 선택 체크박스: 매칭
   document
     .getElementById("selectAllMatched")
     .addEventListener("change", function () {
@@ -249,7 +250,7 @@
       checkboxes.forEach((cb) => (cb.checked = this.checked));
     });
 
-  // 삭제 함수 공통화
+  // 삭제 로직
   function deleteSelected(containerId) {
     const container = document.getElementById(containerId);
     const selected = container.querySelectorAll(
@@ -263,8 +264,9 @@
       !confirm(
         "선택한 시험지를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
       )
-    )
+    ) {
       return;
+    }
 
     const formData = new FormData();
     selected.forEach((cb) => {
@@ -283,7 +285,7 @@
         "X-CSRFToken": "{{ csrf_token }}",
       },
     })
-      .then((response) => response.json())
+      .then((res) => res.json())
       .then((data) => {
         if (data.status === "success") {
           window.location.reload();
@@ -297,19 +299,63 @@
       });
   }
 
-  // 삭제 버튼 클릭(미매칭)
   document
     .getElementById("deleteSelectedUnmatched")
     .addEventListener("click", () => {
       deleteSelected("unmatchedContainer");
     });
-
-  // 삭제 버튼 클릭(매칭)
   document
     .getElementById("deleteSelectedMatched")
     .addEventListener("click", () => {
       deleteSelected("matchedContainer");
     });
-</script>
 
+  // (A) "매칭 & 채점" 버튼 예시
+  document.getElementById("matchAndGradeBtn").addEventListener("click", () => {
+    const container = document.getElementById("unmatchedContainer");
+    const selected = container.querySelectorAll(
+      'input[name="selected_exam_identifier"]:checked'
+    );
+    if (selected.length === 0) {
+      alert("매칭&채점할 시험지를 선택하세요.");
+      return;
+    }
+
+    // 예: 한번에 여러 exam_identifier를 보낼 수도 있고, 우선 첫번째만 처리 등...
+    const formData = {
+      exam_identifier_list: [],
+    };
+    selected.forEach((cb) => {
+      formData.exam_identifier_list.push(cb.value);
+    });
+
+    // 실제 로직
+    if (!confirm("선택된 시험지를 매칭 후 채점을 진행하시겠습니까?")) {
+      return;
+    }
+
+    // Ajax POST: 매칭 + 채점을 처리할 뷰에 요청
+    fetch("{% url 'omr_app:match_and_grade' %}", {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": "{{ csrf_token }}",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(formData),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.status === "success") {
+          alert("매칭 & 채점이 완료되었습니다.");
+          window.location.reload();
+        } else {
+          alert(data.message || "매칭 & 채점 중 오류가 발생했습니다.");
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        alert("서버 오류가 발생했습니다.");
+      });
+  });
+</script>
 {% endblock %}

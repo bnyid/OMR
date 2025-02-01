@@ -1,5 +1,6 @@
-# views.py
-import json
+# apps/omr_app/views.py
+import json, glob, base64, os, shutil
+
 from datetime import datetime
 
 from django.shortcuts import render, get_object_or_404
@@ -12,10 +13,45 @@ from django.urls import reverse
 
 from django.db.models import Q, Count, Max
 
-from apps.omr_app.services.omr_service import process_pdf_and_extract_omr, extract_omr_data_from_image
+from apps.omr_app.services.omr_service import extract_omr_data
 
 from apps.omr_app.models import OMRResult
 from apps.student_app.models import Student
+from apps.exam_app.models import ExamSheet
+
+from django.conf import settings
+from .models import OMRResultEssayImage
+
+
+@csrf_exempt
+def omr_process(request):
+    if request.method == 'POST' and request.FILES.get('file'):
+        print("omr_process 호출됨")
+        uploaded_file = request.FILES['file']
+        try:
+            omr_results = extract_omr_data(uploaded_file)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'omr_process 뷰의 extract_omr_data 함수 오류 발생: {str(e)}'
+            }, status=500)
+            
+        # 각 omr에 대해 student_code 매칭 여부 판단.
+        for omr in omr_results:
+            student_code = omr.get('student_code')  
+            if student_code: # student_code가 있는 경우
+                if Student.objects.filter(student_code=student_code).exists(): # DB 조회 성공시
+                    omr['is_matched'] = True
+        
+        return JsonResponse({
+            'status': 'success',
+            'data': omr_results # 리스트 형태로 반환
+        })
+    
+    return JsonResponse({
+        'status': 'error',
+        'message': '잘못된 요청입니다.'
+    }, status=400)
 
 
 
@@ -103,7 +139,7 @@ def finalize(request):
                 'message': '학생과 매치되지 않은 omr이 있습니다. 매칭 후 다시 시도하세요.'
             }, status=400)
                 
-        OMRResult.objects.create(
+        omr_result = OMRResult.objects.create(
             exam_date=exam_date,
             teacher_code=teacher_code,
             student=student if is_matched else None,
@@ -115,6 +151,62 @@ def finalize(request):
             omr_name=omr_name
         )
 
+        # 이제 주관식 이미지 옮기기 (omr_key)
+        omr_key = omr.get('omr_key')
+        if omr_key:
+            # 1) 임시 폴더에서 파일 찾기
+            temp_dir = getattr(settings, 'TEMP_DIR', '/tmp')
+            temp_omr_dir = os.path.join(temp_dir, 'temp_omr_images')
+            
+            front_filename = f"{omr_key}_front.jpg"
+            front_file_path = os.path.join(temp_omr_dir, front_filename)
+            if os.path.exists(front_file_path):
+                # 2) Media 폴더 (예: MEDIA_ROOT / 'omr_front_pages')
+                media_front_dir = os.path.join(settings.MEDIA_ROOT, 'omr_front_pages')
+                os.makedirs(media_front_dir, exist_ok=True)
+
+                # 3) 이동
+                new_path = os.path.join(media_front_dir, front_filename)
+                shutil.move(front_file_path, new_path)
+
+                # 4) OMRResult.front_page = "omr_front_pages/파일명"
+                relative_front = f"omr_front_pages/{front_filename}"
+                omr_result.front_page = relative_front
+                omr_result.save()
+            
+            pattern = os.path.join(temp_omr_dir, f"{omr_key}_*.jpg")
+            file_list = glob.glob(pattern)
+
+            # 2) Media 폴더 생성
+            media_essay_dir = os.path.join(settings.MEDIA_ROOT, 'essay_images')
+            os.makedirs(media_essay_dir, exist_ok=True)
+
+            # 3) 파일을 한 개씩 옮기면서 OMRResultEssayImage 생성
+            for path in sorted(file_list):
+                # path 예: "/tmp/temp_omr_images/omr_key_0.jpg"
+                filename = os.path.basename(path)  # "omr_key_0.jpg"
+                # 여기서 question_number를 파싱할 수 있으면 int(filename.split('_')[1].split('.')[0]) 식으로 (주의)
+                # 예: "xxxx-uuid-xxxx_0.jpg" -> "0"
+                try:
+                    question_number = int(filename.split('_')[-1].split('.')[0])
+                except:
+                    question_number = 0
+
+                # 새 파일 위치
+                new_path = os.path.join(media_essay_dir, filename)
+
+                # 파일 이동
+                shutil.move(path, new_path)
+                # DB 저장 (ImageField는 "essay_images/filename" 형태로 저장됨)
+                # relative 경로만 넣어주면 Django가 /media/essay_images/... 에서 serve
+                relative_path = f"essay_images/{filename}"
+
+                OMRResultEssayImage.objects.create(
+                    omr_result=omr_result,
+                    question_number=question_number,
+                    image=relative_path
+                )
+        
     return JsonResponse({'status':'success', 'redirect_url': reverse('omr_app:omr_answer_sheet_list')})
 
 
@@ -141,35 +233,7 @@ def show_omr_upload_page(request):
     })
 
 
-@csrf_exempt
-def omr_process(request):
-    if request.method == 'POST' and request.FILES.get('file'):
-        print("omr_process 호출됨")
-        uploaded_file = request.FILES['file']
-        file_name = uploaded_file.name.lower() # 파일 확장자��� Content_Type으로 PDF vs Image 판별
 
-        if file_name.endswith('.pdf'):  # PDF -> 여러 페이지가 포함될 수 있어 다르게 처리
-            omr_results = process_pdf_and_extract_omr(uploaded_file)
-        else: # 이미지 단일 처리
-            omr_data = extract_omr_data_from_image(uploaded_file)
-            omr_results = [omr_data]
-            
-        # 각 omr에 대해 student_code 매칭 여부 판단.
-        for omr in omr_results:
-            student_code = omr.get('student_code')  
-            if student_code: # student_code가 있는 경우
-                if Student.objects.filter(student_code=student_code).exists(): # DB 조회 성공시
-                    omr['is_matched'] = True
-        
-        return JsonResponse({
-            'status': 'success',
-            'data': omr_results # 리스트 형태로 반환
-        })
-    
-    return JsonResponse({
-        'status': 'error',
-        'message': '잘못된 요청입니다.'
-    }, status=400)
 
 
 def omr_result_list(request):
@@ -194,10 +258,55 @@ def omr_result_list(request):
     })
 
 def omr_result_detail(request, result_id):
-    result = get_object_or_404(OMRResult, id=result_id)
-    return render(request, 'omr_app/omr_result_detail.html', {'result': result})
+    omr_result = get_object_or_404(OMRResult, id=result_id)
+    # essay_images = omr_result.essay_images.all()  # (1:N)
+    return render(request, 'omr_app/omr_result_detail.html', {
+        'omr_result': omr_result
+    })
 
+@require_POST
+def get_temp_front_image(request):
+    """
+    JS fetch로 omr_key를 받으면,
+    temp_omr_images/<omr_key>_front.jpg를 base64로 변환하여 JSON으로 반환
+    """
+    try:
+        data = json.loads(request.body)
+        omr_key = data.get('omr_key')
+        if not omr_key:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No omr_key provided.'
+            }, status=400)
 
+        # temp 디렉터리
+        temp_dir = getattr(settings, 'TEMP_DIR', '/tmp')
+        temp_omr_dir = os.path.join(temp_dir, 'temp_omr_images')
+        front_filename = f"{omr_key}_front.jpg"
+        front_path = os.path.join(temp_omr_dir, front_filename)
+
+        if not os.path.exists(front_path):
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Front image not found.'
+            }, status=404)
+
+        # base64 변환
+        with open(front_path, 'rb') as f:
+            raw = f.read()
+
+        import base64
+        b64 = base64.b64encode(raw).decode('utf-8')
+        data_url = f"data:image/jpeg;base64,{b64}"
+
+        return JsonResponse({
+            'status': 'success',
+            'front_image_url': data_url,
+        })
+    except Exception as e:
+        return JsonResponse({'status':'error','message':str(e)}, status=500)
+    
+    
 @require_POST
 def bulk_omr_delete(request):
     print("bulk_omr_delete 호출됨")
@@ -217,3 +326,88 @@ def bulk_omr_delete(request):
 
     return JsonResponse({'status': 'success'})
 
+
+
+def get_essay_images(request):
+    """
+    1) omr_key를 받아
+    2) temp_omr_images/{omr_key}_*.jpg 파일들을 찾아
+    3) base64 or dataURL로 반환 (미리보기 용)
+    """
+    omr_key = request.GET.get('omr_key')
+    if not omr_key:
+        return JsonResponse({"status": "error", "message": "omr_key is required"}, status=400)
+
+    temp_dir = getattr(settings, 'TEMP_DIR', '/tmp')
+    temp_omr_dir = os.path.join(temp_dir, 'temp_omr_images')
+    if not os.path.exists(temp_omr_dir):
+        return JsonResponse({"status":"success", "images":[]})
+
+    pattern = os.path.join(temp_omr_dir, f"{omr_key}_*.jpg")
+    file_list = glob.glob(pattern)
+
+    images_base64 = []
+    for path in sorted(file_list):
+        with open(path, 'rb') as f:
+            raw = f.read()
+            b64 = base64.b64encode(raw).decode('utf-8')
+            data_url = f"data:image/jpeg;base64,{b64}"
+            images_base64.append(data_url)
+
+    return JsonResponse({"status":"success", "images": images_base64})
+
+
+
+
+@require_POST
+def match_and_grade(request):
+    """
+    1) exam_identifier_list를 받아서
+    2) OMRResult들을 ExamSheet와 매칭
+    3) 객관식 채점을 진행
+    4) 채점 완료되면 status=success 반환
+    """
+    try:
+        data = json.loads(request.body)
+        exam_identifier_list = data.get('exam_identifier_list', [])
+
+        if not exam_identifier_list:
+            return JsonResponse({'status':'error','message':'no exam_identifier_list given'}, status=400)
+
+        # (A) 예: 우선 하나의 exam_sheet로 매칭한다고 가정 (실무에서는 UI에서 선택)
+        # sheet_id = ...
+        # exam_sheet = ExamSheet.objects.get(id=sheet_id)
+        # 여기서는 그냥 "임의" exam_sheet 하나를 예시로 가져온다고 가정:
+        exam_sheet = ExamSheet.objects.order_by('-created_at').first()
+        if not exam_sheet:
+            return JsonResponse({'status':'error','message':'ExamSheet가 존재하지 않습니다.'}, status=400)
+
+        # (B) exam_identifier_list 각각에 대해 OMRResult 찾고, exam_sheet로 연결
+        from apps.omr_app.models import OMRResult
+        omr_qs = OMRResult.objects.filter(exam_identifier__in=exam_identifier_list, exam_sheet__isnull=True)
+        # isnull=True → 아직 미매칭인 것만
+
+        if not omr_qs.exists():
+            return JsonResponse({'status':'error','message':'해당 식별자의 미매칭 OMR이 없음'}, status=400)
+
+        # exam_sheet 매핑
+        omr_qs.update(exam_sheet=exam_sheet)
+
+        # (C) 간단 객관식 채점 로직 (실제로는 exam_sheet.questions와 omr.answers를 비교)
+        # 여기서는 그냥 "자동채점완료" 라고만 처리
+        for omr in omr_qs:
+            answers = omr.answers  # 예: {"1": 3, "2": 2, ...}
+            # exam_sheet.questions --> 문제 리스트
+            # 문제의 정답과 비교, 점수 계산 ...
+            # omr_result.score = ...
+            # omr.save() ...
+            pass
+
+        # (D) 응답
+        return JsonResponse({'status':'success','message':'매칭 & 채점을 완료했습니다.'})
+
+    except Exception as e:
+        return JsonResponse({'status':'error','message':str(e)}, status=400)
+    
+    
+    

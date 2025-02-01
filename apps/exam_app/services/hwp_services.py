@@ -1,4 +1,4 @@
-# hwp_service_upgrade.py
+# apps/exam_app/services/hwp_services.py
 from pprint import pprint
 from pyhwpx import Hwp
 import pythoncom, traceback, psutil, re
@@ -518,7 +518,7 @@ def extract_html_text_from_block(hwp):
 
     return result
 
-####################################################
+##################################################################################################################################
 
 def extract_exam_sheet_data(hwp_file_path,visible=True):
     """
@@ -575,6 +575,7 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
     """
     hwp = None
     
+    # hwp = Hwp()
     try:
         pythoncom.CoInitialize() # 한글 프로세스 초기화
         # hwp_file_path = "G:\공유 드라이브\Workspace\omr_exam 테스트용.hwpx" 
@@ -613,7 +614,7 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
             index_text_split = index_text.split("]")
             passage_serial = index_text_split[0].split("[")[1] if len(index_text_split) > 1 else None
                 
-                
+            
             # passage 출처 추출
             source = extract_source_from_index_text(index_text)
 
@@ -628,7 +629,7 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
                 'is_double_question': is_double_question,
                 'is_registered': is_registered
             })
-            
+
             question_dict_list = []
             # double passage인 경우 passage_text 좌표 추출
             if is_double_question:
@@ -647,8 +648,8 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
                 go_to_index(hwp)
                 hwp.Run("MoveParaEnd")
                 search_text(hwp, "*")
-                hwp.Run("MoveLeft")
-                hwp.Run("MoveRight")
+                hwp.Run("CloseEx")
+                hwp.Run("MoveLineBegin")
                 passage_start_coor = hwp.GetPos()
                 
                 if "논술" in index_text:
@@ -659,8 +660,6 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
                 
                 else:
                     search_circled_number(hwp, 1)
-                    hwp.Run("MoveLeft")
-                    hwp.Run("MoveRight")
                     hwp.Run("MovePrevParaEnd")
                     passage_end_coor = hwp.GetPos()
             
@@ -669,8 +668,10 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
             hwp.SetPos(*passage_start_coor)
             hwp.Select()
             hwp.SetPos(*passage_end_coor)
-            passage_text = extract_html_text_from_block(hwp)                    
+            
+            passage_text = extract_html_text_from_block(hwp) if has_content_in_block(hwp) else ''
             passage_dict['passage_text'] = passage_text
+            pprint(passage_text)
             
             # 인덱스 텍스트 끝으로 이동
             hwp.Cancel()
@@ -726,7 +727,6 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
                     question_dict.update({
                         'question_number': multi_num
                     })
-                    
                     hwp.SetPos(*question_text_end_coor)
                     hwp.Run("MoveParaBegin")
                     hwp.Run("MoveSelParaEnd")
@@ -737,6 +737,7 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
                     hwp.Run("MoveSelParaEnd")
                     answer_text = extract_text_from_block(hwp)
                     answer_num = convert_circled_number(answer_text)
+                    
                     hwp.Run("MoveRight")
                     hwp.Run("MoveLeft")
                     
@@ -756,32 +757,38 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
                     hwp.Run("CloseEx")
                     hwp.Run("MoveParaEnd")
                     
+                    question_dict.update({
+                        'answer': answer_num,
+                        'explanation': explanation_text
+                    })
+                    
+                    
                     # 보기 또는 답안 시작점 좌표 저장
                     search_circled_number(hwp, 1)
-                    hwp.Run("MoveLeft")
-                    hwp.Run("MoveRight")
                     choice_start_coor = hwp.GetPos()
 
-                    
-                    # 발문과 보기 사이 범위 블럭
-                    hwp.SetPos(*question_text_end_coor)
-                    hwp.Select()
-                    hwp.SetPos(*choice_start_coor)
-                    
-                    # question_text_extra
                     question_text_extra = ""
-                    if has_content_in_block(hwp):
-                        question_text_extra = extract_html_text_from_block(hwp)
-                        
-                    question_dict.update({
-                        'question_text_extra': question_text_extra
-                    })
-
+                    # 더블 문제인 경우 text_extra 추출
+                    if is_double_question:
+                        # 발문과 보기 사이 범위 블럭
+                        hwp.SetPos(*question_text_end_coor)
+                        hwp.Select()
+                        hwp.SetPos(*choice_start_coor)
+                    
+                        # question_text_extra
+                        question_text_extra = ""
+                        if has_content_in_block(hwp):
+                            question_text_extra = extract_html_text_from_block(hwp)
+                            
+                        question_dict.update({
+                            'question_text_extra': question_text_extra
+                        })
+                        hwp.Cancel()
                     # choice_list
-                    hwp.Cancel()
                     hwp.SetPos(*choice_start_coor)
                     choice_list = []
                     for choice_number in range(1,6):
+                        # choice_number = 1
                         search_circled_number(hwp, choice_number)
                         hwp.Run("MoveRight")
                         choice_num_coor = hwp.GetPos()
@@ -849,24 +856,25 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
                     
                     answer_format_start_coor = hwp.GetPos()
                     
-                    # question_table 있는지 확인
-                    hwp.SetPos(*question_text_end_coor)
-                    hwp.Select()
-                    hwp.SetPos(*answer_format_start_coor)
-                    
+                    # question_text_extra 있는지 확인
                     question_text_extra = ""
-                    if has_content_in_block(hwp):
-                        question_text_extra = extract_html_text_from_block(hwp)
+                    if is_double_question:
+                        hwp.SetPos(*question_text_end_coor)
+                        hwp.Select()
+                        hwp.SetPos(*answer_format_start_coor)
+                        if has_content_in_block(hwp):
+                            question_text_extra = extract_html_text_from_block(hwp)
                         
-                    question_dict.update({
-                        'question_text_extra': question_text_extra
-                    })
-                    
+                        question_dict.update({
+                            'question_text_extra': question_text_extra
+                        })
+                        hwp.Cancel()
+                        
                     # 답안 format 끝점 추출
                     if go_to_faster_question(hwp, "#"):
                         search_text(hwp, "*",direction="Backward")
-                        hwp.Run("MoveRight")
-                        hwp.Run("MoveLeft")
+                        hwp.Run("CloseEx")
+                        hwp.Run("MoveLineEnd")
                         answer_format_end_coor = hwp.GetPos()
                     elif search_text(hwp, "확인사항"):
                         hwp.Run("CloseEx")
@@ -895,8 +903,8 @@ def extract_exam_sheet_data(hwp_file_path,visible=True):
                     
                     go_to_faster_word(hwp, "[논술","<객관")
                     search_text(hwp, "*",direction="Backward")
-                    hwp.Run("MoveRight")
-                    hwp.Run("MoveLeft")
+                    hwp.Run("CloseEx")
+                    hwp.Run("MoveLineEnd")
                     answer_end_coor = hwp.GetPos()
                     
                     hwp.SetPos(*answer_start_coor)

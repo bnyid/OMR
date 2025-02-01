@@ -1,9 +1,10 @@
-# _omr_service_sub.py
+# apps/omr_app/services/_omr_service_sub.py
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import fitz
 from pdf2image import convert_from_bytes
+import math
 
 ##################### STEP 1: 이미지 전처리 및 이미지 기울기 보정 #####################
 
@@ -113,13 +114,14 @@ def correct_skew(image, show_result=False):
 
 ##################### STEP 2: 이미지에서 큰 외곽선과 그 좌표 추출 #####################
 
-def get_coordinates_from_large_contours(gray_image, min_area, show_result=False):
+def get_coordinates_from_large_contours(gray_image, min_area, axis='x', show_result=False):
     """그레이스케일 이미지에서 지정된 최소 면적보다 큰 외곽선들을 찾아 반환합니다.
-    외곽선은 왼쪽에서 오른쪽 순서로 정렬됩니다.
+    axis 파라미터에 따라 x축, 또는 y축 기준으로 순서를 정렬합니다.
 
     Args:
         gray_image (numpy.ndarray): 그레이스케일로 변환된 입력 이미지
         min_area (float): 검출할 외곽선의 최소 면적 (픽셀 단위)
+        axis (str): 정렬 기준 ('x' 또는 'y', 기본값: 'x')
         show_result (bool): 결과를 시각화할지 여부 (기본값: False)
 
     Returns:
@@ -151,11 +153,26 @@ def get_coordinates_from_large_contours(gray_image, min_area, show_result=False)
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) # 모든 외곽선 찾기
     filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area] # 최소 면적보다 큰 외곽선만 필터링
 
-    # 외곽선을 x좌표 기준으로 정렬
+    # 정렬: axis='x'면 x좌표 기준, axis='y'면 y좌표 기준 (두 번째 기준은 반대축)
     if filtered_contours:
-        # 각 외곽선의 중심점 x좌표를 기준으로 정렬
-        sorted_contours = sorted(filtered_contours, 
-                               key=lambda c: cv2.moments(c)['m10']/cv2.moments(c)['m00'])
+        if axis == 'x':
+            # x먼저, x가 같으면 y
+            sorted_contours = sorted(
+                filtered_contours,
+                key=lambda c: (
+                    cv2.boundingRect(c)[0],  # x
+                    cv2.boundingRect(c)[1]   # y
+                )
+            )
+        else:  # axis == 'y'
+            # y먼저, y가 같으면 x
+            sorted_contours = sorted(
+                filtered_contours,
+                key=lambda c: (
+                    cv2.boundingRect(c)[1],  # y
+                    cv2.boundingRect(c)[0]   # x
+                )
+            )
         filtered_contours = sorted_contours
 
     if show_result and filtered_contours:
@@ -173,7 +190,7 @@ def get_coordinates_from_large_contours(gray_image, min_area, show_result=False)
                 cX = int(M['m10'] / M['m00'])
                 cY = int(M['m01'] / M['m00'])
                 cv2.putText(display_image, str(i), (cX, cY), 
-                          cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 100, 255), 2)
+                          cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 0, 0), 4)     # 3=폰트크기, 4=폰트두께
 
         # 이미지 크기 조절
         height, width = display_image.shape[:2]
@@ -184,6 +201,10 @@ def get_coordinates_from_large_contours(gray_image, min_area, show_result=False)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+    # contours 개수 검증
+    if len(filtered_contours) < 5:  # 필요한 최소 contour 개수를 5개로 수정
+        raise ValueError(f"필요한 영역을 찾을 수 없습니다. (발견된 영역: {len(filtered_contours)}개, 필요한 영역: 5개)")
+    
     return filtered_contours
 
 ##################### STEP 3: 외곽선 좌표대로 영역 추출 #####################
@@ -219,8 +240,8 @@ def get_omr_area_image(contour, gray_image, show_result=False):
 ##################### STEP 4: 외곽선에서 마킹 영역만 추출 #####################
 
 def extract_marking_area(omr_area, 
-                         skip_x=(True, 80, 300000, 40000), # (스킵여부, 시작x좌표, 1차임계값, 2차임계값)
-                         skip_y=(True, 190, 40000, 15000),  # (스킵여부, 시작y좌표, 1차임계값, 2차임계값)
+                         skip_x=(True, 80, 300000, 40000), # (스킵여부, 시작x좌표, 1차임계값(상), 2차임계값(하))
+                         skip_y=(True, 190, 40000, 15000),  # (스킵여부, 시작y좌표, 1차임계값(상), 2차임계값(하))
                          show_result=False,
                          ):
     """주어진 OMR 이미지에서 순수 마킹 영역만 추출
@@ -518,6 +539,7 @@ def convert_marking_to_number(marking_result, read_by_column=False):
                     break
             else:
                 result.append('X')  # 마킹이 없는 경우
+    print(f"\n최종 변환 결과: {result}")
     return ''.join(result)
 
 def convert_marking_to_hangul(marking_result, read_by_column=True):
@@ -540,16 +562,12 @@ def convert_marking_to_hangul(marking_result, read_by_column=True):
                 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ']
     
     # 종성 리스트
-    JONGSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 
-                'ㄻ', 'ㄼ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅆ',
-                'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
+    JONGSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 
+                'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
 
     JONGSUNG_MAPPING = {
-        'ㄱ': 1, 'ㄲ': 2, 'ㄴ': 4, 'ㄶ': 6, 'ㄷ': 7, 'ㄹ': 8, 
-        'ㄺ': 9, 'ㄻ': 10, 'ㄼ': 11, 'ㅀ': 15, 'ㅁ': 16, 'ㅂ': 17, 
-        'ㅅ': 19, 'ㅆ': 20, 'ㅇ': 21, 'ㅈ': 22, 'ㅊ': 23, 'ㅋ': 24, 
-        'ㅌ': 25, 'ㅍ': 26, 'ㅎ': 27
-    }
+        'ㄱ': 1, 'ㄲ': 2, 'ㄴ': 4, 'ㄷ': 7, 'ㄸ': 0, 'ㄹ': 8, 'ㅁ': 16, 'ㅂ': 17, 'ㅃ': 0, 'ㅅ': 19,
+        'ㅆ': 20, 'ㅇ': 21, 'ㅈ': 22, 'ㅉ': 0, 'ㅊ': 23, 'ㅋ': 24, 'ㅌ': 25, 'ㅍ': 26, 'ㅎ': 27}
 
     def compose_hangul(cho, jung, jong):
         """초성, 중성, 종성을 조합하여 한글 문자를 생성"""
@@ -691,48 +709,63 @@ def find_reference_markers_in_region(binary_image, region_box, offset_y=0, show_
     return markers
 
 
-def find_markers_for_omr(image, show_result=False):
+
+def find_markers_for_omr(gray_image, min_area=800, show_result=False):
     """
-    수능 OMR 용지를 기준으로 상단/하단에 있는 검은 마커를 찾는 예시 함수.
+    OMR 용지를 기준으로 상단/하단에 있는 검은 마커를 찾는 예시 함수.
     상단/하단 5% 영역만 잘라 사용.
     """
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) # 이미지를 회색조로 변환
     height, width = gray_image.shape
 
     # 이진화
     _, thresh = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     
     if show_result:
-        cv2.namedWindow("마커찾는_이진화이미지", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("마커찾는_이진화이미지", 800, 600)
-        cv2.imshow("마커찾는_이진화이미지", thresh)
+        cv2.namedWindow("binarized_image", cv2.WINDOW_NORMAL) 
+        cv2.resizeWindow("binarized_image", 800, 600)
+        cv2.imshow("binarized_image", thresh)
         cv2.waitKey(0)
 
     # 상단, 하단 영역 슬라이싱 (5%)
-    top_cut = 0.05
-    bottom_cut = 0.93
+    top_cut = 0.10
+    bottom_cut = 0.90
     top_region = thresh[0:int(height*top_cut), :]
     bottom_region = thresh[int(height*bottom_cut):, :]
 
     if show_result:
-        cv2.namedWindow(f"이미지_상단_{top_cut*100}%", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(f"이미지_상단_{top_cut*100}%", 800, 200)
-        cv2.imshow(f"이미지_상단_{top_cut*100}%", top_region)
+        cv2.namedWindow(f"top_region_{top_cut*100}%", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(f"top_region_{top_cut*100}%", 800, 200)
+        cv2.imshow(f"top_region_{top_cut*100}%", top_region)
 
-        cv2.namedWindow(f"이미지_하단_{(1-bottom_cut)*100}%", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(f"이미지_하단_{(1-bottom_cut)*100}%", 800, 200)
-        cv2.imshow(f"이미지_하단_{(1-bottom_cut)*100}%", bottom_region)
+        cv2.namedWindow(f"bottom_region_{(1-bottom_cut)*100}%", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(f"bottom_region_{(1-bottom_cut)*100}%", 800, 200)
+        cv2.imshow(f"bottom_region_{(1-bottom_cut)*100}%", bottom_region)
         cv2.waitKey(0)
 
     # 상단/하단 컨투어 추출
     top_contours, _ = cv2.findContours(top_region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     bottom_contours, _ = cv2.findContours(bottom_region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
+    min_area = min_area  # (예) 최소 면적 픽셀값. 적절히 조정
+    top_contours = [cnt for cnt in top_contours if cv2.contourArea(cnt) >= min_area]
+    bottom_contours = [cnt for cnt in bottom_contours if cv2.contourArea(cnt) >= min_area]
+    
+    
     # 시각화용 이미지 복사
     draw_image = None
     if show_result:
         draw_image = cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
-
+         # (추가) min_area 기준 사각형 그려주기
+        #   - 면적 = min_area → 대략 정사각형으로 가정해서 변의 길이를 sqrt(min_area)로 계산.
+        side = int(math.sqrt(min_area))
+        # 화면 왼쪽 상단(10,10) 위치에, side x side 크기의 사각형을 겹쳐 그려줌
+        cv2.rectangle(
+            draw_image, 
+            (10, 10), 
+            (10 + side, 10 + side), 
+            color=(0, 255, 0), 
+            thickness=2
+        )
     # 상단/하단 마커 포인트
     top_points = extract_line_markers(top_contours, offset_y=0, show_result=show_result, draw_image=draw_image)
     bottom_points = extract_line_markers(bottom_contours, offset_y=int(height*bottom_cut), show_result=show_result, draw_image=draw_image, color=(255,0,0))
@@ -784,9 +817,9 @@ def find_markers_for_omr(image, show_result=False):
     if show_result and draw_image is not None:
         # 기준점 표시
         for i, pt in enumerate(src_points):
-            cv2.circle(draw_image, (int(pt[0]), int(pt[1])), 10, (0,255,255), -1)
+            cv2.circle(draw_image, (int(pt[0]), int(pt[1])), 15, (255,0,0), -1) # 20 = 반지름
             cv2.putText(draw_image, f"P{i+1}", (int(pt[0])+5,int(pt[1])+5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,0,255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 2, (0,0,255), 5) # 3 = 폰트 크기, 2 = 폰트 두께
         
         cv2.destroyAllWindows()
         cv2.namedWindow("Markers Detected", cv2.WINDOW_NORMAL)
@@ -795,7 +828,7 @@ def find_markers_for_omr(image, show_result=False):
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    return src_points, gray_image
+    return src_points
 
 
 def warp_to_standard_view(image, src_points, target_size=(2800, 2000), show_result=False):
@@ -835,3 +868,95 @@ def warp_to_standard_view(image, src_points, target_size=(2800, 2000), show_resu
     return warped
 
 
+
+
+
+
+
+
+############# 뒷면
+
+
+def split_backside_into_equal_regions(
+    image,
+    top_margin=0,
+    bottom_margin=0,
+    left_margin=0,
+    right_margin=0,
+    num_segments=5,
+    show_result=False
+):
+    """
+    뒤쪽(OMR 뒷면) 이미지를 세로방향으로 num_segments등분해서 잘라내는 함수.
+    - 상·하·좌·우 margin 픽셀만큼 잘라내고 남은 영역을 동일한 세로비율로 분할
+    - 컬러/그레이 모두 처리 가능
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        원본 이미지(컬러 or 그레이)
+    top_margin : int
+        위쪽을 잘라낼 픽셀 수
+    bottom_margin : int
+        아래쪽을 잘라낼 픽셀 수
+    left_margin : int
+        왼쪽을 잘라낼 픽셀 수
+    right_margin : int
+        오른쪽을 잘라낼 픽셀 수
+    num_segments : int
+        세로를 몇 등분할지 (기본 5)
+    show_result : bool
+        True면 시각화하여 확인 (디버깅용)
+
+    Returns
+    -------
+    list of numpy.ndarray
+        세로로 나눈 영역들이 순서대로 저장된 리스트
+    """
+
+    # 1) 이미지 크기
+    h, w = image.shape[:2]  # 그레이든 컬러든 [:2]는 height, width
+    # 2) margin 만큼 잘라내기 (클리핑)
+    #    주의: bottom_margin이 있으면 아래쪽 h - bottom_margin
+    #         right_margin이 있으면 w - right_margin
+    #    잘라낸 결과를 new_img에 저장
+    new_img = image[
+        top_margin : h - bottom_margin,
+        left_margin : w - right_margin
+    ].copy()
+
+    # 3) 세로 높이, 가로 폭
+    clipped_h, clipped_w = new_img.shape[:2]
+
+    # 4) 세로 방향으로 num_segments 등분
+    segment_height = clipped_h / num_segments  # float
+    #    정수로 변환할지 여부는 선택
+    #    만약 애매한 소수가 나올 수 있으면, int로 변환해서 마지막 부분은 약간 짤릴 수도 있음
+    #    우선 float로 두고 범위 슬라이싱 시 int() 캐스팅
+    regions = []
+    for i in range(num_segments):
+        y_start = int(i * segment_height)
+        y_end   = int((i + 1) * segment_height)
+
+        cropped = new_img[y_start : y_end, 0 : clipped_w].copy()
+        regions.append(cropped)
+
+    # 5) show_result 시각화
+    if show_result:
+        display_img = new_img.copy()
+        # 직선(가로줄)로 분할 위치 표시
+        for i in range(1, num_segments):
+            y_line = int(i * segment_height)
+            cv2.line(display_img, (0, y_line), (clipped_w, y_line), (0,0,255), 3)
+
+        # 창 크기 조절을 위한 설정 추가
+        cv2.namedWindow("Backside-Split", cv2.WINDOW_NORMAL)
+        h, w = display_img.shape[:2]
+        cv2.resizeWindow("Backside-Split", w//2, h//2)  # 너비와 높이를 절반으로
+
+        # 창에 표시
+        cv2.imshow("Backside-Split", display_img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    return regions

@@ -1,3 +1,4 @@
+# apps/exam_app/models.py
 from django.db import models
 from django.core.exceptions import ValidationError
 
@@ -121,6 +122,21 @@ class Passage(models.Model):
 
 ## 문제 모델 ##
 class Question(models.Model):
+
+    # HWP MAPPING
+    HWP_MAPPING_TO_DETAIL_TYPE = {
+        '논술형(어법)' : '논술형_어법',
+        '어법' : '객관식_어법',
+        '순서' : '순서배열',
+        '삽입' : '문장삽입',
+        '제목' : '제목',
+        '주제' : '주제',
+        '요약' : '요약문',
+        '빈칸' : '빈칸추론',
+        '함축' : '함축의미',
+        '어휘' : '문맥어휘',
+        '영영풀이' : '영영풀이'
+    }
 
     # 영역 CHOICES        
     CATEGORY_CHOICES = [

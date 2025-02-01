@@ -1,0 +1,112 @@
+<!-- templates/exam_app/exam_sheet_list.html -->
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+
+<h2>시험지 목록</h2>
+
+<!-- 예: 선택 삭제 버튼 -->
+<div class="mb-2 text-end">
+  <button type="button" class="btn btn-sm btn-danger" id="deleteSelectedBtn">
+    선택 삭제
+  </button>
+</div>
+
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <!-- (1) 전체선택 체크박스 -->
+      <th>
+        <input type="checkbox" id="selectAll" />
+      </th>
+      <!-- (2) 생성일 -->
+      <th>생성일</th>
+      <!-- (3) 시험명 -->
+      <th>시험명</th>
+      <!-- (4) 총문항수 -->
+      <th>총문항수</th>
+      <!-- (5) 객관식 -->
+      <th>객관식</th>
+      <!-- (6) 논술형 -->
+      <th>논술형</th>
+      <!-- (7) OMR 갯수 -->
+      <th>OMR</th>
+      <!-- (8) 작업 -->
+      <th>작업</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for sheet in exam_sheets %}
+    <tr {% if sheet.omr_count == 0 %} class="table-warning" {% endif %}>
+      <!-- 각 행 체크박스 (value=시험지id) -->
+      <td>
+        <input type="checkbox" name="selected_sheets" value="{{ sheet.id }}" />
+      </td>
+      <td>{{ sheet.created_at|date:"Y-m-d H:i" }}</td>
+      <td>{{ sheet.title }}</td>
+      <td>{{ sheet.total_questions }}</td>
+      <td>{{ sheet.objective_count }}</td>
+      <td>{{ sheet.essay_count }}</td>
+      <td>{{ sheet.omr_count }}</td>
+      <td>
+        <!-- 예: 상세, 수정, 매칭/채점 등 자유롭게 -->
+        <a href="{% url 'exam_app:exam_sheet_detail' sheet.id %}"
+           class="btn btn-sm btn-primary">
+          상세
+        </a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr>
+      <td colspan="8" class="text-center text-muted">
+        등록된 시험지가 없습니다.
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+// (A) 전체선택 체크박스 로직
+document.getElementById('selectAll').addEventListener('change', function(){
+  const checkboxes = document.querySelectorAll('input[name="selected_sheets"]');
+  checkboxes.forEach(cb => cb.checked = this.checked);
+});
+
+// (B) 선택삭제 버튼 로직
+document.getElementById('deleteSelectedBtn').addEventListener('click', function(){
+  const selected = [];
+  document.querySelectorAll('input[name="selected_sheets"]:checked').forEach(cb => {
+    selected.push(cb.value);
+  });
+  if(selected.length === 0) {
+    alert("삭제할 시험지를 선택하세요.");
+    return;
+  }
+  if(!confirm("정말로 삭제하시겠습니까?")) return;
+
+  fetch("{% url 'exam_app:exam_sheet_bulk_delete' %}", {
+    method: "POST",
+    headers: {
+      'X-CSRFToken': '{{ csrf_token }}',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ sheet_ids: selected })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if(data.status === 'success') {
+      // 성공 시 페이지 새로고침
+      window.location.reload();
+    } else {
+      alert(data.message || "삭제 중 오류가 발생했습니다.");
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    alert("서버 오류가 발생했습니다.");
+  });
+});
+</script>
+
+{% endblock %}

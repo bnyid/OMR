@@ -41,7 +41,10 @@
           <a class="nav-link" href="{% url 'exam_app:upload_exam_sheet' %}">
             시험지 업로드
           </a>
-          <a class="nav-link" href="">시험 결과</a>
+          <a class="nav-link" href="{% url 'exam_app:exam_sheet_list' %}"
+            >시험지 목록</a
+          >
+
           <a
             class="nav-link"
             href="{% url 'student_app:inactive_student_list' %}"

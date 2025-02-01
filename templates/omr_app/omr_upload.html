@@ -1,5 +1,41 @@
-<!-- omr_upload.html -->
+<!-- templates/omr_app/omr_upload.html -->
 {% extends 'base.html' %} {% block content %}
+
+<style>
+  .review-row {
+    display: flex;
+    gap: 1rem;
+  }
+  .review-col {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .essay-slot img {
+    max-width: 600px;
+    max-height: 300px;
+    border: 1px solid #ccc;
+    padding: 2px;
+    background: #fff;
+  }
+
+  #subjectiveReviewModal .modal-dialog {
+    max-width: 1400px; /* 원하는 폭으로 설정 */
+    width: 90%; /* 원하는 백분율로 설정 가능 */
+  }
+
+  .custom-modal-dialog {
+    width: 130% !important; /* 원하시면 80~90% 등 적절하게 */
+    max-width: 1300px !important; /* px로 제한 가능, 없애면 너무 커질 수 있음 */
+  }
+
+  .custom-modal-dialog .modal-content {
+    max-height: 90vh; /* 모달 최대 높이를 뷰포트의 90% */
+    overflow: auto; /* 내용이 넘치면 스크롤 */
+  }
+</style>
+
 <div class="row justify-content-center">
   <div class="col-md-8">
     <div class="card mb-3">
@@ -31,8 +67,10 @@
 <div class="text-end mb-3">
   <button id="deleteBtn" class="btn btn-danger">OMR 삭제</button>
   <button id="matchBtn" class="btn btn-warning">응시자 매칭</button>
+  <button id="reviewBtn" class="btn btn-info">주관식 검토</button>
   <button id="finalSubmitBtn" class="btn btn-success">최종 제출</button>
 </div>
+
 <table id="omrTable" class="table table-striped table-bordered mt-3">
   <thead>
     <tr>
@@ -42,6 +80,7 @@
       <th class="text-center">매칭 상태</th>
       <th class="text-center">학생코드</th>
       <th class="text-center">학생이름</th>
+      <th class="text-center">작업</th>
     </tr>
   </thead>
   <tbody></tbody>
@@ -75,6 +114,93 @@
       </div>
       <div class="modal-footer">
         <button id="applyMatchBtn" class="btn btn-primary">매칭 적용</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- (추가) 앞면 이미지 모달 -->
+<div class="modal fade" id="frontModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl custom-modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">OMR 앞면 미리보기</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <!-- 여기서 실제 이미지 표시 -->
+        <img
+          id="frontImageView"
+          src=""
+          style="max-width: 90%; border: 1px solid #ccc"
+        />
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 주관식 검토 모달 추가 -->
+<div
+  class="modal fade"
+  id="subjectiveReviewModal"
+  tabindex="-1"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <!-- 모달 헤더 -->
+      <div class="modal-header modal-header-nav position-relative">
+        <div
+          class="d-flex align-items-center gap-3 position-absolute start-50 translate-middle-x"
+        >
+          <button id="prevPersonBtn" class="btn btn-outline-primary btn-sm">
+            ◀
+          </button>
+          <h5 id="subjectiveModalTitle" class="modal-title mb-0"></h5>
+          <button id="nextPersonBtn" class="btn btn-outline-primary btn-sm">
+            ▶
+          </button>
+        </div>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+
+      <!-- 모달 바디 -->
+      <div class="modal-body">
+        <!-- 2열 구조 -->
+        <div class="review-row">
+          <div class="review-col" id="leftImagesCol">
+            <!-- 1번~5번 이미지 자리 -->
+            <div class="essay-slot"><img id="essayImg1" /></div>
+            <div class="essay-slot"><img id="essayImg2" /></div>
+            <div class="essay-slot"><img id="essayImg3" /></div>
+            <div class="essay-slot"><img id="essayImg4" /></div>
+            <div class="essay-slot"><img id="essayImg5" /></div>
+          </div>
+          <div class="review-col" id="rightImagesCol">
+            <!-- 6번~10번 이미지 자리 -->
+            <div class="essay-slot"><img id="essayImg6" /></div>
+            <div class="essay-slot"><img id="essayImg7" /></div>
+            <div class="essay-slot"><img id="essayImg8" /></div>
+            <div class="essay-slot"><img id="essayImg9" /></div>
+            <div class="essay-slot"><img id="essayImg10" /></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 모달 푸터 -->
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
       </div>
     </div>
   </div>
@@ -196,7 +322,9 @@
 </div>
 
 <script>
-  // 폼 제출 이벤트 핸들러
+  // --------------------------
+  // (1) 폼 제출 이벤트 (PDF 업로드 -> omr_process)
+  // --------------------------
   document.getElementById("omrForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -221,8 +349,11 @@
         ? "매칭완료"
         : "<span style='color:red;'>응시자 매칭 필요</span>";
 
+      // 테이블 행 생성
       const row = document.createElement("tr");
       row.dataset.index = idx;
+
+      // 내부 HTML
       row.innerHTML = `
         <td><input type="checkbox" class="rowCheck"></td>
         <td>${omr.exam_date}</td>
@@ -230,11 +361,160 @@
         <td>${matchStatus}</td>
         <td>${omr.student_code || ""}</td>
         <td>${omr.student_name || ""}</td>
+        <td>
+          <button 
+            class="btn btn-sm btn-info" 
+            onclick="showFrontModal('${omr.omr_key}')">
+            상세
+          </button>
+        </td>
       `;
+
+      // 각 셀 가져오기
+      const cells = row.querySelectorAll("td");
+
+      // (중요) 매칭상태 열(=4번째, colIndex=3)은 '트리플클릭' 등록을 건너뛰어 편집 불가 처리
+      cells.forEach((cell, colIdx) => {
+        // 첫 열(colIdx=0)이나 "매칭상태"(colIdx=3) , 마지막 열(colIdx=6) 등
+        // 편집을 막고 싶다면 조건문으로 제외
+        if (colIdx === 0 || colIdx === 3 || colIdx === 4 || colIdx === 6) {
+          return; // 편집 이벤트 등록하지 않음
+        }
+
+        cell.addEventListener("click", handleCellTripleClick);
+      });
+
       tbody.appendChild(row);
     });
 
+    // 매칭 필요 항목을 위로 정렬
     sortUnmatchedFirst();
+  }
+
+  /**
+   * 트리플 클릭 감지 (e.detail === 3)
+   */
+  function handleCellTripleClick(e) {
+    // 삼중 클릭이 아닐 경우 무시
+    if (e.detail !== 3) return;
+
+    const cell = e.currentTarget;
+
+    // 이미 편집 중인지 체크
+    if (cell.getAttribute("data-editing") === "true") {
+      return;
+    }
+
+    // 편집 모드로 전환
+    cell.setAttribute("data-editing", "true");
+
+    const oldValue = cell.innerText.trim();
+
+    // contenteditable 활성화
+    cell.contentEditable = "true";
+    cell.focus();
+
+    // 키보드, blur 이벤트
+    cell.addEventListener("keydown", onKeyDownWhileEditing);
+    cell.addEventListener("blur", onBlurWhileEditing);
+
+    function onKeyDownWhileEditing(evt) {
+      if (evt.key === "Enter") {
+        evt.preventDefault();
+        finishEditing();
+      }
+    }
+
+    function onBlurWhileEditing() {
+      finishEditing();
+    }
+
+    // 편집 종료 처리
+    function finishEditing() {
+      const newValue = cell.innerText.trim();
+
+      // contenteditable 해제
+      cell.contentEditable = "false";
+      cell.removeAttribute("data-editing");
+
+      // 리스너 해제
+      cell.removeEventListener("keydown", onKeyDownWhileEditing);
+      cell.removeEventListener("blur", onBlurWhileEditing);
+
+      // 값이 바뀌었다면 omrResultsList에 반영
+      if (newValue !== oldValue) {
+        updateOMRData(cell, newValue);
+      }
+    }
+  }
+
+  /**
+   * 수정된 셀 데이터를 window.omrResultsList에 반영
+   * @param {HTMLTableCellElement} cell - 수정된 셀
+   * @param {string} newValue - 새 텍스트 값
+   */
+  function updateOMRData(cell, newValue) {
+    const row = cell.parentElement;
+    const rowIndex = parseInt(row.dataset.index, 10);
+
+    // 현재 행의 모든 td 수집 후, 수정된 cell의 colIndex 식별
+    const cells = Array.from(row.children);
+    const colIndex = cells.indexOf(cell);
+
+    let fieldName = null;
+    switch (colIndex) {
+      case 1: // "시험일"
+        fieldName = "exam_date";
+        break;
+      case 2: // "강사 코드"
+        fieldName = "teacher_code";
+        break;
+      case 4: // "학생코드"
+        fieldName = "student_code";
+        break;
+      case 5: // "학생이름"
+        fieldName = "student_name";
+        break;
+      default:
+        console.warn("편집 대상이 아닌 열입니다.");
+        return;
+    }
+
+    if (window.omrResultsList[rowIndex]) {
+      window.omrResultsList[rowIndex][fieldName] = newValue;
+      console.log(
+        `rowIndex=${rowIndex}, field=${fieldName}, newVal=${newValue}`
+      );
+    }
+  }
+
+  // 모달 열기: 앞면 이미지 base64 요청 -> 모달 표시
+  async function showFrontModal(omr_key) {
+    try {
+      const resp = await fetch("{% url 'omr_app:get_temp_front_image' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ omr_key: omr_key }),
+      });
+      const data = await resp.json();
+      if (data.status === "success") {
+        const frontImg = document.getElementById("frontImageView");
+        frontImg.src = data.front_image_url;
+
+        const modal = new bootstrap.Modal(
+          document.getElementById("frontModal")
+        );
+        modal.show();
+      } else {
+        alert("이미지 로드 실패: " + data.message);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("서버 통신 오류");
+    }
   }
 
   function sortUnmatchedFirst() {
@@ -255,6 +535,16 @@
     rows.forEach((r) => tbody.appendChild(r));
   }
 
+  // --------------------------
+  // (2) 체크박스 선택/삭제
+  // --------------------------
+  function getSelectedRows(tableId) {
+    const CHECKBOX_CLASS = "rowCheck";
+    return Array.from(document.querySelectorAll(`#${tableId} tbody tr`)).filter(
+      (tr) => tr.querySelector(`.${CHECKBOX_CLASS}`).checked
+    );
+  }
+
   document.getElementById("deleteBtn").addEventListener("click", () => {
     if (!confirm("선택한 항목을 삭제하시겠습니까?")) {
       return;
@@ -266,10 +556,12 @@
       window.omrResultsList[idx] = null;
       tr.remove();
     });
-
     window.omrResultsList = window.omrResultsList.filter((el) => el !== null);
   });
 
+  // --------------------------
+  // (3) 응시자 매칭 로직
+  // --------------------------
   document.getElementById("matchBtn").addEventListener("click", () => {
     const selectedRows = getSelectedRows("omrTable");
     if (selectedRows.length === 0) {
@@ -286,13 +578,6 @@
     studentMatchModal.show();
   });
 
-  function getSelectedRows(tableId) {
-    const CHECKBOX_CLASS = "rowCheck";
-    return Array.from(document.querySelectorAll(`#${tableId} tbody tr`)).filter(
-      (tr) => tr.querySelector(`.${CHECKBOX_CLASS}`).checked
-    );
-  }
-
   document
     .getElementById("studentSearchBtn")
     .addEventListener("click", async () => {
@@ -306,13 +591,13 @@
       data.forEach((st) => {
         const row = document.createElement("tr");
         row.innerHTML = `
-        <td><input type="radio" name="selectedStudent" value="${
-          st.id
-        }" data-name="${st.name}" data-code="${st.student_code}"></td>
-        <td>${st.class_name || ""}</td>
-        <td>${st.student_code}</td>
-        <td>${st.name}</td>
-      `;
+          <td><input type="radio" name="selectedStudent" value="${
+            st.id
+          }" data-name="${st.name}" data-code="${st.student_code}"></td>
+          <td>${st.class_name || ""}</td>
+          <td>${st.student_code}</td>
+          <td>${st.name}</td>
+        `;
         tbody.appendChild(row);
       });
     });
@@ -348,6 +633,66 @@
     studentMatchModal.hide();
   });
 
+  // --------------------------
+  // (4) 주관식 검토 (여러명 선택 가능, 모달에서 prev/next)
+  // --------------------------
+  let reviewList = [];
+  let currentReviewIndex = 0;
+
+  document.getElementById("reviewBtn").addEventListener("click", () => {
+    reviewList = window.omrResultsList;
+    if (!reviewList || reviewList.length === 0) {
+      alert("OMR 데이터가 없습니다.");
+      return;
+    }
+    currentReviewIndex = 0;
+    showSubjectiveReviewModal(reviewList[currentReviewIndex]);
+
+    const subjectiveModal = new bootstrap.Modal(
+      document.getElementById("subjectiveReviewModal")
+    );
+    subjectiveModal.show();
+  });
+
+  document.getElementById("prevPersonBtn").addEventListener("click", () => {
+    if (currentReviewIndex > 0) {
+      currentReviewIndex--;
+      showSubjectiveReviewModal(reviewList[currentReviewIndex]);
+    }
+  });
+  document.getElementById("nextPersonBtn").addEventListener("click", () => {
+    if (currentReviewIndex < reviewList.length - 1) {
+      currentReviewIndex++;
+      showSubjectiveReviewModal(reviewList[currentReviewIndex]);
+    }
+  });
+
+  async function showSubjectiveReviewModal(omrData) {
+    const modalTitle = document.getElementById("subjectiveModalTitle");
+    modalTitle.textContent = `주관식 검토 - ${omrData.student_name || "학생"}`;
+
+    try {
+      const resp = await fetch(
+        `/omr/get_essay_images?omr_key=${omrData.omr_key}`
+      );
+      const json = await resp.json();
+      if (json.status === "success") {
+        const images = json.images || [];
+        for (let i = 1; i <= 10; i++) {
+          const imgEl = document.getElementById(`essayImg${i}`);
+          imgEl.src = images[i - 1];
+        }
+      } else {
+        console.error("이미지 불러오기 실패:", json.message);
+      }
+    } catch (err) {
+      console.error("이미지 요청 오류:", err);
+    }
+  }
+
+  // --------------------------
+  // (5) 최종 제출 로직
+  // --------------------------
   document.getElementById("finalSubmitBtn").addEventListener("click", () => {
     const modal = new bootstrap.Modal(
       document.getElementById("finalOmrNameModal")
@@ -355,7 +700,6 @@
     modal.show();
   });
 
-  // 라디오 선택 상태에 따른 UI 업데이트
   const classSelect = document.getElementById("class_name_select");
   const classBySchoolSelect = document.getElementById(
     "class_name_by_school_select"
@@ -367,40 +711,32 @@
 
   function updateDropdownState() {
     if (classTypeClass.checked) {
-      // 소속반 기준 활성화
       classSelect.disabled = false;
       classBySchoolSelect.disabled = true;
-
       classBox.classList.remove("inactive");
       classBox.classList.add("active");
       schoolBox.classList.remove("active");
       schoolBox.classList.add("inactive");
     } else if (classTypeSchool.checked) {
-      // 학교반 기준 활성화
       classSelect.disabled = true;
       classBySchoolSelect.disabled = false;
-
       schoolBox.classList.remove("inactive");
       schoolBox.classList.add("active");
       classBox.classList.remove("active");
       classBox.classList.add("inactive");
     } else {
-      // 아무 것도 선택 안 된 경우(초기상태)
       classSelect.disabled = true;
       classBySchoolSelect.disabled = true;
-
       classBox.classList.remove("active");
       classBox.classList.add("inactive");
       schoolBox.classList.remove("active");
       schoolBox.classList.add("inactive");
     }
   }
-
   classTypeClass.addEventListener("change", updateDropdownState);
   classTypeSchool.addEventListener("change", updateDropdownState);
-  updateDropdownState(); // 초기상태 설정
+  updateDropdownState();
 
-  // 최종 제출
   document
     .getElementById("finalConfirmBtn")
     .addEventListener("click", async () => {
@@ -434,6 +770,7 @@
       }
 
       const omrDataArray = window.omrResultsList.map((data) => ({
+        omr_key: data.omr_key,
         exam_date: data.exam_date,
         teacher_code: data.teacher_code,
         is_matched: data.is_matched,
@@ -465,4 +802,5 @@
       }
     });
 </script>
+
 {% endblock %}

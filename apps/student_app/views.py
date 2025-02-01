@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404
-from django.db.models import Value, DateField
+from django.db.models import Value, DateField, Q
 from django.db.models.functions import Coalesce
 
 from django.http import JsonResponse
@@ -95,7 +95,7 @@ def student_add(request):
             
             # 선택적 필드 처리
             optional_fields = [
-                'registered_date', 'student_id', 
+                'registered_date', 'student_id', 'student_code',
                 'class_name', 'school_type', 'school_name', 'grade', 
                 'phone_number', 'parent_phone', 'note', 
             ]

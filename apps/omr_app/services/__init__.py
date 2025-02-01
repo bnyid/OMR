@@ -1,7 +1,7 @@
-from .omr_service import extract_omr_data_from_image 
+from .omr_service import extract_omr_data 
 
 __all__ = [
-    'extract_omr_data_from_image',
+    'extract_omr_data',
 ]
 
 

@@ -4,22 +4,22 @@
 <h2>미등원 학생 목록</h2>
 <div class="btn-group mb-3">
   <a
-    href="{% url 'apps.student_app:inactive_student_list' %}"
+    href="{% url 'student_app:inactive_student_list' %}"
     class="btn btn-sm {% if not request.GET.status %}btn-primary{% else %}btn-outline-primary{% endif %}"
     >전체</a
   >
   <a
-    href="{% url 'apps.student_app:inactive_student_list' %}?status=leave"
+    href="{% url 'student_app:inactive_student_list' %}?status=leave"
     class="btn btn-sm {% if request.GET.status == 'leave' %}btn-primary{% else %}btn-outline-primary{% endif %}"
     >휴원</a
   >
   <a
-    href="{% url 'apps.student_app:inactive_student_list' %}?status=dropout"
+    href="{% url 'student_app:inactive_student_list' %}?status=dropout"
     class="btn btn-sm {% if request.GET.status == 'dropout' %}btn-primary{% else %}btn-outline-primary{% endif %}"
     >퇴원</a
   >
   <a
-    href="{% url 'apps.student_app:inactive_student_list' %}?status=graduated"
+    href="{% url 'student_app:inactive_student_list' %}?status=graduated"
     class="btn btn-sm {% if request.GET.status == 'graduated' %}btn-primary{% else %}btn-outline-primary{% endif %}"
     >졸업</a
   >
@@ -28,7 +28,7 @@
 <form
   id="bulkInactiveActionForm"
   method="post"
-  action="{% url 'apps.student_app:bulk_action' %}"
+  action="{% url 'student_app:bulk_action' %}"
 >
   {% csrf_token %}
 

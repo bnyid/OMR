@@ -1,4 +1,4 @@
-# models.py
+# apps/omr_app/models.py
 from django.db import models
 
       
@@ -22,10 +22,13 @@ class OMRResult(models.Model):
     answer_sheet = models.ImageField('답안지', upload_to='answer_sheets/')
     processed_sheet = models.ImageField('처리된 답안지', upload_to='processed_sheets/', null=True, blank=True)
     answers = models.JSONField('답안 결과')
-    created_at = models.DateTimeField('생성일', auto_now_add=True)
     
     class_name = models.CharField('반이름', max_length=20, null=True, blank=True)
     omr_name = models.CharField('OMR 이름', max_length=50, default='', blank=True)
+    
+    created_at = models.DateTimeField('생성일', auto_now_add=True)
+    
+    front_page = models.ImageField('OMR 앞면 이미지', upload_to='omr_front_pages/', null=True, blank=True)
     
     class Meta:
         verbose_name = 'OMR 결과'
@@ -45,3 +48,59 @@ class OMRResult(models.Model):
         name = self.student.name if self.student else (self.unmatched_student_name or "미매칭")
         return f"{self.exam_identifier} - {name}"
     
+
+
+class OMRResultEssayImage(models.Model):
+    """
+    주관식(서술형) 이미지 정보
+    """
+    omr_result = models.ForeignKey(
+        OMRResult,
+        on_delete=models.CASCADE,
+        related_name='essay_images',  # OMRResult에서 역참조할 때 omr_result.essay_images.all()
+        verbose_name='OMR 결과'
+    )
+    question_number = models.PositiveIntegerField('주관식 문항 번호')
+    image = models.ImageField('주관식 문항 이미지', upload_to='essay_images/')
+    created_at = models.DateTimeField('등록일', auto_now_add=True)
+
+    def __str__(self):
+        return f"OMR {self.omr_result.id} - 문항 {self.question_number}"
+    
+
+    
+class OMRStudentAnswer(models.Model):
+    """
+    한 학생(OMRResult)이 특정 문항(Question)에 대해 어떤 응답을 했고,
+    채점 결과가 어떠한지 저장하는 테이블
+    """
+    omr_result = models.ForeignKey(
+        OMRResult,
+        on_delete=models.CASCADE,
+        related_name='student_answers'
+    )
+    question = models.ForeignKey(
+        'exam_app.Question',
+        on_delete=models.CASCADE,
+        related_name='student_answers'
+    )
+
+    # 복수응답인 경우, ex) [2,3] 형태도 가능
+    # 단일응답 ex) 2, 혹은 문자열 "2"
+    selected_answers = models.JSONField('선택한 답', null=True, blank=True)
+
+    # 채점 결과
+    is_correct = models.BooleanField('정답 여부', default=False)
+    # 부분점수 / 만점 저장
+    score_earned = models.FloatField('획득 점수', default=0.0)
+    total_score = models.FloatField('배점', default=1.0)
+
+    created_at = models.DateTimeField('생성일', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '학생-문항별 응답'
+        verbose_name_plural = '학생-문항별 응답(OMRStudentAnswer)'
+        unique_together = [('omr_result', 'question')]
+
+    def __str__(self):
+        return f"OMRResult#{self.omr_result_id} - Q#{self.question_id}"

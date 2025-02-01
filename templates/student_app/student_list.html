@@ -299,8 +299,8 @@
         { targets: [4], searchable: true }, // 이름 열 (4는 4번째 열을 의미)
         { targets: [5], searchable: true }, // 내신반 열
         { targets: [6], searchable: true }, // 소속반 열
-        { targets: [7], searchable: true }, // 학교 열
-        { targets: [8], searchable: true }, // 학년 열
+        { targets: [8], searchable: true }, // 학교 열
+        { targets: [9], searchable: true }, // 학년 열
         { targets: "_all", searchable: false }, // _all은 모든 열을 의미하는데, 위에 설정한 열을 제외한 나머지 열은 검색 불가능하게 만들어, 효율성,속도를 향상시킴.
       ],
     });
@@ -318,12 +318,12 @@
 
     // 학교 필터 적용
     $("#schoolFilter").on("change", function () {
-      table.column(7).search(this.value).draw();
+      table.column(8).search(this.value).draw();
     });
 
     // 학년 필터 적용
     $("#gradeFilter").on("change", function () {
-      table.column(8).search(this.value).draw();
+      table.column(9).search(this.value).draw();
     });
 
     // 이름 검색

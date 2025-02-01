@@ -123,9 +123,9 @@
   <thead>
     <tr>
       <th class="text-center">p_num</th>
-      <th class="text-center">p_seri</th>
+      <th class="text-center">p_serial</th>
       <th class="text-center">p_source</th>
-      <th class="text-center">o_num</th>
+      <th class="text-center">multi/essay</th>
       <th class="text-center">q_num</th>
       <th class="text-center">q_type</th>
       <th class="text-center">q_score</th>
@@ -190,6 +190,7 @@
                   id="reviewDouble"
                   class="form-control form-control-sm"
                   readonly
+                  contenteditable="false"
                 />
               </div>
             </div>
@@ -266,82 +267,81 @@
                 <div
                   id="answerFormat1"
                   style="border: 1px solid #ccc; padding: 5px; min-height: 20px"
+                  contenteditable="true"
                 >
                   <!-- 여기에 동적으로 answer_format을 append -->
                 </div>
               </div>
             </div>
+          </div>
 
-            <!-- 3열 -->
-            <div class="review-col">
-              <div class="review-section" id="questionBlock2">
-                <!-- 문제 번호 -->
-                <h6 id="questionNumber2"></h6>
+          <!-- 3열 -->
+          <div class="review-col">
+            <div class="review-section" id="questionBlock2">
+              <!-- 문제 번호 -->
+              <h6 id="questionNumber2"></h6>
 
-                <!-- question_text -->
-                <div class="mb-2">
-                  <label>question_text</label>
-                  <div
-                    id="questionText2"
-                    class="editable-box"
-                    contenteditable="true"
-                  ></div>
+              <!-- question_text -->
+              <div class="mb-2">
+                <label>question_text</label>
+                <div
+                  id="questionText2"
+                  class="editable-box"
+                  contenteditable="true"
+                ></div>
+              </div>
+
+              <!-- question_text_extra -->
+              <div class="mb-2">
+                <label>question_text_extra</label>
+                <div
+                  id="questionTextExtra2"
+                  class="editable-box"
+                  contenteditable="true"
+                ></div>
+              </div>
+
+              <!-- q_choices -->
+              <div class="mb-2">
+                <label>q_choices</label>
+                <div id="questionChoices2">
+                  <!-- 여기에 동적으로 choices들을 append -->
                 </div>
+              </div>
 
-                <!-- question_text_extra -->
-                <div class="mb-2">
-                  <label>question_text_extra</label>
-                  <div
-                    id="questionTextExtra2"
-                    class="editable-box"
-                    contenteditable="true"
-                  ></div>
+              <!-- 정답 -->
+              <h6>정답</h6>
+              <div class="mb-2">
+                <label>answer</label>
+                <div id="answer2" class="editable-box" contenteditable="true">
+                  <!-- 여기에 동적으로 answer를 append -->
                 </div>
+              </div>
 
-                <!-- q_choices -->
-                <div class="mb-2">
-                  <label>q_choices</label>
-                  <div id="questionChoices2">
-                    <!-- 여기에 동적으로 choices들을 append -->
-                  </div>
-                </div>
+              <!-- explanation -->
+              <div class="mb-2">
+                <label>해설</label>
+                <div
+                  id="explanation2"
+                  class="editable-box"
+                  contenteditable="true"
+                ></div>
+              </div>
 
-                <!-- 정답 -->
-                <h6>정답</h6>
-                <div class="mb-2">
-                  <label>answer</label>
-                  <div id="answer2" class="editable-box" contenteditable="true">
-                    <!-- 여기에 동적으로 answer를 append -->
-                  </div>
-                </div>
-
-                <!-- explanation -->
-                <div class="mb-2">
-                  <label>해설</label>
-                  <div
-                    id="explanation2"
-                    class="editable-box"
-                    contenteditable="true"
-                  ></div>
-                </div>
-
-                <!-- answer_format -->
-                <div class="mb-2">
-                  <label>주관식 작성란</label>
-                  <div
-                    id="answerFormat2"
-                    style="
-                      border: 1px solid #ccc;
-                      padding: 5px;
-                      min-height: 20px;
-                    "
-                  >
-                    <!-- 동적으로 작성란(div 등)을 append 할 예정 -->
-                  </div>
+              <!-- answer_format -->
+              <div class="mb-2">
+                <label>주관식 작성란</label>
+                <div
+                  id="answerFormat2"
+                  style="border: 1px solid #ccc; padding: 5px; min-height: 20px"
+                  contenteditable="true"
+                >
+                  <!-- 동적으로 작성란(div 등)을 append 할 예정 -->
                 </div>
               </div>
             </div>
           </div>
+          <!-- /.review-col (3열) -->
         </div>
         <!-- Container end -->
       </div>
@@ -430,42 +430,46 @@
     const tbody = document.querySelector("#examTable tbody"); // tbody 선택
     tbody.innerHTML = ""; // 테이블 초기화
 
-    passages.forEach((passage) => {
+    passages.forEach((passage, index) => {
       // 반복문 시작
       // 각 데이터 변수 세팅
+      const isDouble = passage.is_double_question ? "True" : "False";
+
+      const isRegistered = passage.is_registered ? "True" : "False";
+      const passageText = passage.passage_text || "";
+
       const passageNumber = passage.passage_number || "";
       const passageSerial = passage.passage_serial || "";
       const passageSource = passage.passage_source || "";
-      const isDouble = passage.is_double_question ? "True" : "False";
-      const isRegistered = passage.is_registered ? "True" : "False";
-      const passageText = passage.passage_text || "";
 
       // question list는 1개 또는 2개
       const questionList = passage.question_list || [];
       questionList.forEach((question, qIndex) => {
-        const rowSpan = isDouble ? "rowspan=2" : "";
-        const multiRowClass = isDouble ? "multi-row-cell" : "";
-
-        const questionNumber = question.question_number || "";
-        const gradingNumber = question.grading_number || "";
-        const questionType = question.question_type || "";
+        const rowSpan = isDouble === "True" ? "rowspan=2" : "";
+        const multiRowClass = isDouble === "True" ? "multi-row-cell" : "";
+        const isEssay = question.is_essay ? "논술형" : "객관식";
+        console.log(
+          `passage_number=${passage.passage_number}, question.is_essay=${question.is_essay}, isEssay=${isEssay}`
+        );
+        const o_num = question.order_number || "-";
+        const questionNumber = question.question_number || "-";
+        const questionType = question.question_type || "-";
         const questionScore = question.score || "입력필요";
-        const ans = question.answer || "";
-
+        const ans = question.answer || "-";
         const tr = document.createElement("tr");
 
         // 전반부 열들은 첫번째 순회에서만 셀을 만듬
         if (qIndex === 0) {
           tr.innerHTML += `
-            <td class="text-center align-middle ${multiRowClass}" ${rowSpan}>${passageNumber}</td> // p_num
-            <td class="text-center align-middle ${multiRowClass}" ${rowSpan}>${passageSerial}</td> // p_serial
-            <td class="text-center align-middle ${multiRowClass}" ${rowSpan}>${passageSource}</td> // p_source
+            <td class="text-center align-middle ${multiRowClass}" ${rowSpan}>${passageNumber}</td>
+            <td class="text-center align-middle ${multiRowClass}" ${rowSpan}>${passageSerial}</td>
+            <td class="text-center align-middle ${multiRowClass}" ${rowSpan}>${passageSource}</td>
           `;
         }
         // 후반부 열들은 분기될 수 있음
         tr.innerHTML += `
+          <td class="text-center align-middle">${isEssay}</td>
           <td class="text-center align-middle">${questionNumber}</td>
-          <td class="text-center align-middle">${gradingNumber}</td>
           <td class="text-center align-middle">${questionType}</td>
           <td class="text-center align-middle">${questionScore}</td>
           <td class="text-center align-middle">${ans}</td>
@@ -493,8 +497,8 @@
     if (!extractedData) return;
     if (currentPassageIndex > 0) {
       saveCurrentModalChanges(); // 넘어가기 전 현재 passage_index의 변경사항을 저장
-      prevPassageIndex = currentPassageIndex - 1;
-      showPassageInReviewModal(prevPassageIndex);
+      currentPassageIndex = currentPassageIndex - 1;
+      showPassageInReviewModal(currentPassageIndex);
     }
   });
 
@@ -503,8 +507,8 @@
     if (!extractedData) return;
     if (currentPassageIndex < extractedData.length - 1) {
       saveCurrentModalChanges();
-      nextPassageIndex = currentPassageIndex + 1;
-      showPassageInReviewModal(nextPassageIndex);
+      currentPassageIndex = currentPassageIndex + 1;
+      showPassageInReviewModal(currentPassageIndex);
     }
   });
 
@@ -680,9 +684,13 @@
     .getElementById("saveReviewChangesBtn")
     .addEventListener("click", () => {
       saveCurrentModalChanges();
-      alert("변경사항이 저장되었습니다. (단, 실제 서버 반영은 최종 제출 시)");
+      const reviewModalInstance = bootstrap.Modal.getInstance(
+        document.getElementById("reviewModal")
+      );
+      reviewModalInstance.hide();
     });
 
+  // 최종 제출 버튼
   document.getElementById("finalSubmitBtn").addEventListener("click", () => {
     const modal = new bootstrap.Modal(
       document.getElementById("finalExamNameModal")
