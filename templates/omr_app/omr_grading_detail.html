@@ -73,6 +73,9 @@
           <span id="questionText"></span>
         </div>
 
+        <div class="alert alert-warning">
+          <span id="questionAnswer"> 작성 필요 </span>
+        </div>
         <!-- (B) 현재 채점 내용 표시 영역 -->
         <div class="d-flex flex-wrap gap-3" id="essayGradingArea">
           <div>
@@ -95,6 +98,7 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="prevBtn">(←)이전</button>
         <button class="btn btn-secondary" id="nextBtn">다음(→)</button>
+        <button class="btn btn-success" id="submitScoreBtn">채점(Enter)</button>
         <button class="btn btn-outline-primary" data-bs-dismiss="modal">
           닫기
         </button>
@@ -125,6 +129,7 @@
   const questionTextSpan = document.getElementById("questionText");
   const scoreToApplySpan = document.getElementById("scoreToApply");
   const essayModalEl = document.getElementById("essayGradingModal");
+  const questionAnswerSpan = document.getElementById("questionAnswer");
   // (A) "논술형 채점하기" 버튼 클릭 → 모달 띄우기 + data 로드
   essayGradingBtn.addEventListener("click", () => {
     loadEssayData();
@@ -159,6 +164,9 @@
     // 문제 발문 표시 (question_text가 존재하는 경우)
     questionTextSpan.textContent = q.question_text || "";
 
+    // 문제 정답 표시
+    questionAnswerSpan.textContent = q.answer || "";
+
     // 학생이름
     studentNameSpan.textContent = o.student_name || "미매칭";
 
@@ -179,6 +187,44 @@
       totalScoreSpan.textContent = q.score;
     }
   }
+
+  // 채점(완료) 처리 함수: Enter 키와 [채점] 버튼에서 호출
+  async function submitScore() {
+    if (scoreInput !== "") {
+      const newScore = parseFloat(scoreInput);
+      const q = essayQuestions[currentQuestionIndex];
+      const o = omrList[currentStudentIndex];
+
+      if (newScore > parseFloat(q.score)) {
+        alert("입력된 점수가 문제 점수를 초과합니다.");
+        return; // 입력값이 유효하지 않으므로 진행 중단
+      }
+
+      let ans = o.answers.find((a) => a.question_id === q.id);
+      if (!ans) {
+        ans = {
+          question_id: q.id,
+          score_earned: q.score, // 기본적으로 문항 배점으로 초기화
+          total_score: q.score,
+        };
+        // 오타 수정: s.answers 대신 o.answers 사용
+        o.answers.push(ans);
+      }
+      ans.score_earned = newScore;
+      scoreDisplay.textContent = newScore;
+
+      // 서버 업데이트 (비동기 처리, 결과는 사용하지 않고 진행)
+      await updateEssayScore(o.id, q.id, newScore);
+
+      // 입력 초기화 후 다음 학생/문항으로 이동
+      scoreInput = "";
+      scoreToApplySpan.textContent = "";
+      moveToNext();
+    }
+  }
+
+  // [채점] 버튼 클릭 시 submitScore 호출
+  submitScoreBtn.addEventListener("click", submitScore);
 
   function resetScore() {
     const q = essayQuestions[currentQuestionIndex];
@@ -228,9 +274,7 @@
       currentStudentIndex = 0;
       currentQuestionIndex++;
       if (currentQuestionIndex >= essayQuestions.length) {
-        alert("모든 문항 채점을 완료했습니다.");
-        essayModal.hide();
-        return;
+        alert("마지막 문항입니다.");
       }
     }
     showCurrent();

@@ -61,7 +61,7 @@ def omr_answer_sheet_list(request):
 
     unmatched_grouped_results = (
         OMRResult.objects.filter(exam_sheet__isnull=True)
-        .values('exam_identifier', 'class_name','omr_name') # values() : Django ORM에서 특정 필드만 선택하여 딕셔너리 형태로 반환
+        .values('exam_identifier', 'class_name','omr_name') # values() : Django ORM에서 특정 필드들을 기준으로 groupby해줌
         .annotate(
             num_attendees=Count('id'), 
             latest_created_at=Max('created_at'),
@@ -314,20 +314,23 @@ def get_temp_front_image(request):
     
 @require_POST
 def bulk_omr_delete(request):
-    print("bulk_omr_delete 호출됨")
     exam_identifiers = request.POST.getlist('selected_exam_identifier')
     omr_names = request.POST.getlist('selected_omr_name')
     class_names = request.POST.getlist('selected_class_name')
 
-    if not exam_identifiers or not omr_names:
+    if not exam_identifiers:
         return JsonResponse({'status': 'error', 'message': '선택된 시험지가 없습니다.'})
     
-    if len(exam_identifiers) != len(omr_names):
-        return JsonResponse({'status': 'error', 'message': '데이터 불일치가 발생했습니다.'})
 
-     # 각각 (exam_identifier, omr_name, class_name) 쌍에 대해 삭제 수행
-    for ident, oname, cname in zip(exam_identifiers, omr_names, class_names):
-        OMRResult.objects.filter(exam_identifier=ident, omr_name=oname, class_name=cname).delete()
+    # exam_identifier만 있는 경우(채점 화면에서 삭제를 수행한 경우)
+    if not omr_names or not class_names:
+        OMRResult.objects.filter(exam_identifier__in=exam_identifiers).delete()
+    
+    # exam_identifier, omr_name, class_name 모두 있는 경우(미매칭 OMR 목록에서 삭제를 수행한 경우)
+    else:
+        # 각각 (exam_identifier, omr_name, class_name) 쌍에 대해 삭제 수행
+        for ident, oname, cname in zip(exam_identifiers, omr_names, class_names):
+            OMRResult.objects.filter(exam_identifier=ident, omr_name=oname, class_name=cname).delete()
 
     return JsonResponse({'status': 'success'})
 
@@ -527,8 +530,10 @@ def fetch_essay_data(request):
             "order_number": q.order_number,
             "number": q.number,
             "score": q.score,
-            "question_text": q.question_text
+            "question_text": q.question_text,
+            "answer": q.answer,
         })
+
 
     # (B) omrs JSON
     omr_list = []
@@ -628,8 +633,6 @@ def omr_grading_list(request):
             exam_sheet_title=F('exam_sheet__title')
         )
         .order_by('-latest_created_at')
-
-
 
     )
 

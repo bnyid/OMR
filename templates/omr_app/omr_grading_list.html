@@ -2,8 +2,13 @@
 
 {% extends "base.html" %} {% block content %}
 
+<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}" />
+
 <div class="container mt-4">
   <h1>채점 목록</h1>
+  <div class="mb-3 text-end">
+    <button id="deleteSelectedBtn" class="btn btn-danger">삭제</button>
+  </div>
   <table id="gradingList" class="table table-striped">
     <thead>
       <tr>
@@ -24,11 +29,12 @@
         <td>
           <input
             type="checkbox"
-            class="form-check-input"
+            class="form-check-input select-checkbox"
             data-exam-identifier="{{ grouped_result.exam_identifier }}"
           />
         </td>
         <td>{{ grouped_result.exam_identifier }}</td>
+
         <td>{{ grouped_result.exam_date|date:"Y-m-d" }}</td>
         <td>{{ grouped_result.teacher_code }}</td>
         <td>{{ grouped_result.exam_sheet_title }}</td>
@@ -51,5 +57,79 @@
     </tbody>
   </table>
 </div>
+
+{% endblock %} {% block scripts %}
+
+<script>
+  // 전체 선택 체크박스 이벤트 처리 (선택/해제)
+  const selectAllCheckbox = document.getElementById("selectAll");
+  selectAllCheckbox.addEventListener("change", function () {
+    const checkboxes = document.querySelectorAll(".select-checkbox");
+    checkboxes.forEach((cb) => {
+      cb.checked = selectAllCheckbox.checked;
+    });
+  });
+
+  // 삭제 버튼 클릭 이벤트 처리
+  const deleteBtn = document.getElementById("deleteSelectedBtn");
+  deleteBtn.addEventListener("click", function () {
+    // 선택된 체크박스들을 모두 찾음
+    const selectedCheckboxes = document.querySelectorAll(
+      ".select-checkbox:checked"
+    );
+
+    if (selectedCheckboxes.length === 0) {
+      alert("삭제할 시험을 하나 이상 선택하세요.");
+      return;
+    }
+
+    // 각 체크박스의 data 속성에서 값을 추출하여 배열에 저장
+    const examIdentifiers = [];
+
+    selectedCheckboxes.forEach((cb) => {
+      examIdentifiers.push(cb.getAttribute("data-exam-identifier"));
+    });
+
+    // 사용자 확인 (선택한 건수를 보여줌)
+    if (
+      !confirm(
+        `선택한 ${selectedCheckboxes.length}개의 OMR을 삭제하시겠습니까?`
+      )
+    ) {
+      return;
+    }
+
+    // CSRF 토큰 가져오기 (만약 템플릿에서 {% csrf_token %}을 사용하고 있다면)
+    const csrftoken = document.querySelector(
+      "[name=csrfmiddlewaretoken]"
+    ).value;
+
+    // AJAX POST 요청 보내기 (Fetch API 사용)
+    fetch("{% url 'omr_app:bulk_omr_delete' %}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-CSRFToken": csrftoken,
+      },
+      body: new URLSearchParams({
+        selected_exam_identifier: examIdentifiers,
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.status === "success") {
+          alert("선택한 시험들이 삭제되었습니다.");
+          // 페이지 새로고침 또는 목록 업데이트
+          window.location.reload();
+        } else {
+          alert("삭제 실패: " + data.message);
+        }
+      })
+      .catch((error) => {
+        console.error("삭제 중 오류 발생:", error);
+        alert("삭제 중 오류가 발생했습니다.");
+      });
+  });
+</script>
 
 {% endblock %}
