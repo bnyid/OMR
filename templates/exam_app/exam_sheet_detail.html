@@ -1,0 +1,86 @@
+{% extends "base.html" %} {% load static %} {% block content %}
+<style>
+  /* 시험지 상세 페이지 커스텀 스타일 */
+  .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+  }
+  .card-title {
+    margin-bottom: 0;
+  }
+  .exam-info {
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+  .exam-info p {
+    margin: 0;
+  }
+  .table th,
+  .table td {
+    vertical-align: middle;
+  }
+</style>
+
+<div class="container my-4">
+  <div class="card">
+    <!-- 시험지 기본 정보 -->
+    <div class="card-header">
+      <h2 class="card-title">{{ exam_sheet.title }}</h2>
+      <div class="exam-info">
+        <p><strong>총 문항수:</strong> {{ exam_sheet.total_questions }}</p>
+        <p>
+          <strong>생성일:</strong> {{ exam_sheet.created_at|date:"Y-m-d H:i" }}
+          &nbsp;|&nbsp; <strong>수정일:</strong> {{
+          exam_sheet.updated_at|date:"Y-m-d H:i" }}
+        </p>
+      </div>
+    </div>
+
+    <!-- 문제 리스트 -->
+    <div class="card-body">
+      <h4>문항 리스트</h4>
+      <table class="table table-bordered mt-3">
+        <thead class="table-light">
+          <tr>
+            <th class="text-center">문항 번호</th>
+            <th class="text-center">문항 유형</th>
+            <th class="text-center">유형 내 번호</th>
+            <th class="text-center">세부 유형</th>
+            <th class="text-center">문제 본문</th>
+            <th class="text-center">정답</th>
+            <th class="text-center">배점</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for question in exam_sheet.questions.all %}
+          <tr>
+            <td class="text-center align-middle">
+              {{ question.order_number }}
+            </td>
+            <td class="text-center align-middle">
+              {{ question.multi_or_essay }}
+            </td>
+            <td class="text-center align-middle">{{ question.number }}</td>
+            <td class="text-center align-middle">{{ question.detail_type }}</td>
+            <td class="align-middle">{{ question.question_text }}</td>
+            <td class="align-middle">{{ question.answer }}</td>
+            <td class="text-center align-middle">{{ question.score }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center">등록된 문항이 없습니다.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <!-- 시험지 목록으로 돌아가기 버튼 -->
+      <div class="text-end mt-3">
+        <a href="{% url 'exam_app:exam_sheet_list' %}" class="btn btn-secondary"
+          >뒤로가기</a
+        >
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

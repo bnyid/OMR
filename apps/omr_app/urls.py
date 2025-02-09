@@ -21,8 +21,15 @@ urlpatterns = [
     path('answer-sheets/', views.omr_answer_sheet_list, name='omr_answer_sheet_list'),
     path('answer-sheets/<str:exam_identifier>/', views.omr_result_grouped_detail, name='omr_result_detail_grouped'),
     
+    
+    path('match_and_auto_grade/', views.match_and_auto_grade, name='match_and_auto_grade'),
+    path('fetch_essay_data/', views.fetch_essay_data, name='fetch_essay_data'),
+    
+    # 채점 목록
+    path('grading_list/', views.omr_grading_list, name='omr_grading_list'),
+    path('grading/<str:exam_identifier>/', views.omr_grading_detail, name='omr_grading_detail'),
+    path('grade_essay/', views.grade_essay_update, name='grade_essay_update'),
 
-    path('match-and-grade/', views.match_and_grade, name='match_and_grade'),
     path('omr-result-detail/<int:result_id>/', views.omr_result_detail, name='omr_result_detail'),
 ]
 

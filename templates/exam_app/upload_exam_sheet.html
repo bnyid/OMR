@@ -122,14 +122,14 @@
 <table id="examTable" class="table table-bordered mt-3">
   <thead>
     <tr>
-      <th class="text-center">p_num</th>
-      <th class="text-center">p_serial</th>
-      <th class="text-center">p_source</th>
-      <th class="text-center">multi/essay</th>
-      <th class="text-center">q_num</th>
-      <th class="text-center">q_type</th>
-      <th class="text-center">q_score</th>
-      <th class="text-center">ans</th>
+      <th class="text-center">order_num</th>
+      <th class="text-center">source</th>
+      <th class="text-center">multi_or_essay</th>
+      <th class="text-center">num</th>
+      <th class="text-center">type</th>
+      <th class="text-center">question_text</th>
+      <th class="text-center">answer</th>
+      <th class="text-center">score</th>
     </tr>
   </thead>
   <tbody>
@@ -215,14 +215,12 @@
       const question_text = question.question_text;
       const answer = question.answer;
       const score = question.score;
-
-      const passageNumber = question.passage_number || "";
-      const passageSerial = question.passage_serial || "";
-      const passageSource = question.passage_source || "";
+      const source = question.source || "";
 
       const tr = document.createElement("tr");
       tr.innerHTML += `
           <td class="text-center align-middle">${order_number}</td>
+          <td class="text-center align-middle">${source}</td>
           <td class="text-center align-middle">${multi_or_essay}</td>
           <td class="text-center align-middle">${number}</td>
           <td class="text-center align-middle">${detail_type}</td>

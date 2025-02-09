@@ -34,6 +34,12 @@
     max-height: 90vh; /* 모달 최대 높이를 뷰포트의 90% */
     overflow: auto; /* 내용이 넘치면 스크롤 */
   }
+
+  /* 체크박스 크기 키우기 */
+  input[type="checkbox"] {
+    transform: scale(1.5);
+    transform-origin: left top;
+  }
 </style>
 
 <div class="row justify-content-center">
@@ -320,8 +326,10 @@
     </div>
   </div>
 </div>
-
+{% endblock %} {% block scripts %}
 <script>
+  let omrResultsList = [];
+
   // --------------------------
   // (1) 폼 제출 이벤트 (PDF 업로드 -> omr_process)
   // --------------------------
@@ -341,11 +349,11 @@
   });
 
   function renderOMRTable(omrList) {
-    window.omrResultsList = omrList;
+    omrResultsList = omrList;
     const tbody = document.querySelector("#omrTable tbody");
     tbody.innerHTML = "";
     omrList.forEach((omr, idx) => {
-      const matchStatus = omr.is_matched
+      const studentMatchStatus = omr.student_is_matched
         ? "매칭완료"
         : "<span style='color:red;'>응시자 매칭 필요</span>";
 
@@ -358,7 +366,7 @@
         <td><input type="checkbox" class="rowCheck"></td>
         <td>${omr.exam_date}</td>
         <td>${omr.teacher_code}</td>
-        <td>${matchStatus}</td>
+        <td>${studentMatchStatus}</td>
         <td>${omr.student_code || ""}</td>
         <td>${omr.student_name || ""}</td>
         <td>
@@ -407,7 +415,6 @@
 
     // 편집 모드로 전환
     cell.setAttribute("data-editing", "true");
-
     const oldValue = cell.innerText.trim();
 
     // contenteditable 활성화
@@ -443,17 +450,17 @@
 
       // 값이 바뀌었다면 omrResultsList에 반영
       if (newValue !== oldValue) {
-        updateOMRData(cell, newValue);
+        updateOMRData(cell, newValue, oldValue);
       }
     }
   }
 
   /**
-   * 수정된 셀 데이터를 window.omrResultsList에 반영
+   * 수정된 셀 데이터를 omrResultsList에 반영
    * @param {HTMLTableCellElement} cell - 수정된 셀
    * @param {string} newValue - 새 텍스트 값
    */
-  function updateOMRData(cell, newValue) {
+  function updateOMRData(cell, newValue, oldValue) {
     const row = cell.parentElement;
     const rowIndex = parseInt(row.dataset.index, 10);
 
@@ -469,9 +476,6 @@
       case 2: // "강사 코드"
         fieldName = "teacher_code";
         break;
-      case 4: // "학생코드"
-        fieldName = "student_code";
-        break;
       case 5: // "학생이름"
         fieldName = "student_name";
         break;
@@ -480,12 +484,24 @@
         return;
     }
 
-    if (window.omrResultsList[rowIndex]) {
-      window.omrResultsList[rowIndex][fieldName] = newValue;
-      console.log(
-        `rowIndex=${rowIndex}, field=${fieldName}, newVal=${newValue}`
-      );
+    const targetItem = omrResultsList[rowIndex];
+
+    if (!targetItem) {
+      console.error("targetItem이 없습니다.");
+      return;
     }
+
+    // ---------------------- 디버그 콘솔 ----------------------
+    console.log("DEBUG: updateOMRData", {
+      rowIndex: rowIndex,
+      studentName: targetItem.student_name,
+      fieldName: fieldName,
+      oldValue: oldValue, // 삼중 클릭 전에 표시된 값
+      newValue: newValue, // 사용자가 편집해 최종 확정한 값
+    });
+    // ---------------------------------------------------------
+
+    targetItem[fieldName] = newValue;
   }
 
   // 모달 열기: 앞면 이미지 base64 요청 -> 모달 표시
@@ -553,10 +569,10 @@
     const selectedRows = getSelectedRows("omrTable");
     selectedRows.forEach((tr) => {
       const idx = parseInt(tr.dataset.index);
-      window.omrResultsList[idx] = null;
-      tr.remove();
+      omrResultsList[idx] = null;
     });
-    window.omrResultsList = window.omrResultsList.filter((el) => el !== null);
+    omrResultsList = omrResultsList.filter((el) => el !== null);
+    renderOMRTable(omrResultsList);
   });
 
   // --------------------------
@@ -621,10 +637,10 @@
       tr.querySelector("td:nth-child(6)").textContent = student_name;
 
       const idx = parseInt(tr.dataset.index);
-      window.omrResultsList[idx].is_matched = true;
-      window.omrResultsList[idx].student_id = student_id;
-      window.omrResultsList[idx].student_code = student_code;
-      window.omrResultsList[idx].student_name = student_name;
+      omrResultsList[idx].student_is_matched = true;
+      omrResultsList[idx].student_id = student_id;
+      omrResultsList[idx].student_code = student_code;
+      omrResultsList[idx].student_name = student_name;
     });
 
     const studentMatchModal = bootstrap.Modal.getInstance(
@@ -640,7 +656,7 @@
   let currentReviewIndex = 0;
 
   document.getElementById("reviewBtn").addEventListener("click", () => {
-    reviewList = window.omrResultsList;
+    reviewList = omrResultsList;
     if (!reviewList || reviewList.length === 0) {
       alert("OMR 데이터가 없습니다.");
       return;
@@ -769,16 +785,20 @@
         return;
       }
 
-      const omrDataArray = window.omrResultsList.map((data) => ({
+      console.log("최종 omrResultsList =", omrResultsList);
+
+      const omrDataArray = omrResultsList.map((data) => ({
         omr_key: data.omr_key,
         exam_date: data.exam_date,
         teacher_code: data.teacher_code,
-        is_matched: data.is_matched,
+        student_is_matched: data.student_is_matched,
         student_id: data.student_id,
         student_code: data.student_code,
         student_name: data.student_name,
         answers: data.answers,
       }));
+
+      console.log("서버 전송 omrDataArray =", omrDataArray);
 
       const response = await fetch("{% url 'omr_app:finalize' %}", {
         method: "POST",

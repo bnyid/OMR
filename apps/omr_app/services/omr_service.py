@@ -185,12 +185,9 @@ def extract_omr_data(pdf_file):
             exam_date_str = f"{year}-{month}-{day}"
             
             # answers를 JSON 형태로 변환
-            answers_list = []
+            answers_dict = {}
             for q_num, ans in zip(question_numbers, all_answers):
-                answers_list.append({
-                    'question_number': q_num,
-                    'answer': ans
-                })
+                answers_dict[str(q_num)] = ans
         except Exception as e:
             print(f"OMR 데이터 추출 실패(앞면). 오류: {e}")
             continue
@@ -254,7 +251,7 @@ def extract_omr_data(pdf_file):
             front_filepath = os.path.join(temp_save_path, front_filename)
             cv2.imwrite(front_filepath, front_warped_image)
 
-            # [3] 실제 파일로 저장
+            # [3] 뒷면 이미지 저장 (뒷면 실제 파일로 저장)
             for cidx, split_img in enumerate(final_images):
 
                 # 파일명 예) {omr_key}_0.jpg, {omr_key}_1.jpg ...
@@ -277,8 +274,8 @@ def extract_omr_data(pdf_file):
             'teacher_code': teacher_code, # '01', '02' 등 2자리 문자열
             'student_code': student_code,
             'student_name': student_name,
-            'answers': answers_list,
-            'is_matched': False,
+            'answers': answers_dict,
+            'student_is_matched': False,
         }
 
         results.append(omr_data)

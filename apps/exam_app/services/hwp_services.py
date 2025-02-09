@@ -90,38 +90,32 @@ def extract_number_from_text(text):
         return int(number) if number.is_integer() else number
     return None
 
-def extract_detail_type(type_texts):
+def extract_detail_type(type_text):
     """
-    인덱스 텍스트(#)에서 세부 유형 리스트를 최대 2개 추출
-    
+    인덱스 텍스트(#)에서 세부 유형 추출
+
     Args:
-        type_texts (list): 유형 텍스트 리스트
+        type_text (str): 유형 텍스트
                     
-                Returns:
+    Returns:
         list: 추출된 세부 유형 리스트(최대 2개)
     """
-                
-    detail_type_keywords = ['어법','어휘', '일치', '순서', '삽입', '제목', '주제', '요약', '빈칸', '함축', '영영풀이']            
-    essay_type_keywords = ['논술형(어법)', '논술형(요약)', '논술형(영작)'] # 추후 수정 필요
+    detail_type_keywords = ['어법','어휘', '일치', '순서', '삽입','무관문', '제목', '주제', '요약', '빈칸', '함축', '영영풀이']
     
-    question_type_list = []
     detail_type = None
-    for type_text in type_texts:
-        # 논술형 먼저 파악
-        for keyword in essay_type_keywords:
-            # keyword = essay_type_keywords[0]
+
+    # 먼저 "논술형(내용)" 패턴을 정규식을 이용해 검색
+    essay_match = re.search(r'논술형\([^)]*\)', type_text)
+    if essay_match:
+        detail_type = essay_match.group()
+    else:
+        # 논술형에 해당하지 않으면 나머지 키워드 검색
+        for keyword in detail_type_keywords:
             if keyword in type_text:
                 detail_type = keyword
                 break
-        # 논술형에서 세부유형이 없으면 객관식 세부유형 파악
-        if detail_type is None:
-            for keyword in detail_type_keywords:
-                # keyword = detail_type_keywords[1]
-                if keyword in type_text:
-                    detail_type = keyword
-                    break
-        question_type_list.append(detail_type)
-    return question_type_list
+                    
+    return detail_type
 
 # 검색
 def search_text(hwp, text,direction="Forward"):
@@ -356,11 +350,11 @@ def convert_circled_number(text):
     """
     # 다양한 원문자 매핑
     circled_num_map = {
-        '①': 1, '❶': 1, '➀': 1,  # 1에 해당하는 다양한 원문자
-        '②': 2, '❷': 2, '➁': 2,  # 2에 해당하는 다양한 원문자
-        '③': 3, '❸': 3, '➂': 3,  # 3에 해당하는 다양한 원문자
-        '④': 4, '❹': 4, '➃': 4,  # 4에 해당하는 다양한 원문자
-        '⑤': 5, '❺': 5, '➄': 5,  # 5에 해당하는 다양한 원문자
+        '①': '1', '❶': '1', '➀': '1',  # 1에 해당하는 다양한 원문자
+        '②': '2', '❷': '2', '➁': '2',  # 2에 해당하는 다양한 원문자
+        '③': '3', '❸': '3', '➂': '3',  # 3에 해당하는 다양한 원문자
+        '④': '4', '❹': '4', '➃': '4',  # 4에 해당하는 다양한 원문자
+        '⑤': '5', '❺': '5', '➄': '5',  # 5에 해당하는 다양한 원문자
         # 필요한 만큼 추가
     }
     
@@ -580,8 +574,7 @@ def extract_exam_sheet_info(hwp_file_path,visible=False):
         hwp = Hwp(visible=visible)
         hwp.Open(hwp_file_path)
         hwp.Run("MoveDocBegin")
-        
-        passage_num = 0
+
         order_num = 0
         multi_num = 0
         essay_num = 0
@@ -589,86 +582,83 @@ def extract_exam_sheet_info(hwp_file_path,visible=False):
         
         while search_text(hwp, "#"):
             question_dict = {}
-            passage_num += 1
             
             # 인덱스 텍스트 추출 및 좌표 저장
             hwp.Run("MoveSelParaEnd")
             index_text = extract_text_from_block(hwp)
             hwp.Run("CloseEx")
             hwp.Run("MoveParaEnd")
-            index_end_coordinate = hwp.GetPos() # 좌표
+            start_coor = hwp.GetPos()
             
-            # question_type_list 추출 (콤마(,)기준)
-            type_texts = index_text.split(",")
-            question_type_list = extract_detail_type(type_texts)
+            # question_type 추출 (콤마(,)기준)
+            type_text = index_text.split("-")[1]
+            question_type = extract_detail_type(type_text)
                 
-            # passage 출처 추출
+            # 출처
             source = extract_source_from_index_text(index_text)
             
-            # 더블/싱글 문제 처리
-            question_count = 2 if "##" in index_text else 1
-            for i in range(question_count):
-                # 문단번호로 이동
-                go_to_index(hwp)
-                start_coor = hwp.GetPos()
-                
-                # HEADSTRING 추출 후 논술/객관식 판단
-                headstring = hwp.GetHeadingString()
-                if "논술" in headstring:
-                    multi_or_essay = "논술형"
-                    essay_num += 1
-                    number = essay_num
-                else:
-                    multi_or_essay = "객관식"
-                    multi_num += 1
-                    number = multi_num
+            # 문단번호로 이동
+            go_to_index(hwp)
+            
+            # HEADSTRING 추출 후 논술/객관식 판단
+            headstring = hwp.GetHeadingString()
+            if "논술" in headstring:
+                multi_or_essay = "논술형"
+                essay_num += 1
+                number = essay_num
+            else:
+                multi_or_essay = "객관식"
+                multi_num += 1
+                number = multi_num
 
+            hwp.Run("MoveSelParaEnd")
+            question_text = extract_text_from_block(hwp)
+            
+            # score
+            
+            search_text_condition(hwp, r"{\d점}|{\d\.\d점}")
+            score_text = extract_text_from_block(hwp)
+            score = extract_number_from_text(score_text)
+            
+            # answer
+            if multi_or_essay == "객관식":
+                # answer(객관식)
+                hwp.Run("MoveParaBegin")
                 hwp.Run("MoveSelParaEnd")
-                question_text = extract_text_from_block(hwp)
+                enter_note(hwp)
+                search_text(hwp, "*")
+                hwp.Run("MoveSelParaEnd")
+                answer_text = extract_text_from_block(hwp)
+                answer = convert_circled_number(answer_text)
+                hwp.Run("CloseEx")
+                hwp.Run("MoveParaEnd")
                 
-                # score
-                search_text_condition(hwp, r"{\d점}|{\d\.\d점}")
-                score_text = extract_text_from_block(hwp)
-                score = extract_number_from_text(score_text)
-                
-                
-                # answer
-                if multi_or_essay == "객관식":
-                    # answer(객관식)
-                    hwp.Run("MoveParaBegin")
-                    hwp.Run("MoveSelParaEnd")
-                    enter_note(hwp)
-                    search_text(hwp, "*")
-                    hwp.Run("MoveSelParaEnd")
-                    answer_text = extract_text_from_block(hwp)
-                    answer_num = convert_circled_number(answer_text)
-                    hwp.Run("CloseEx")
-                    hwp.Run("MoveParaEnd")
-                    
-                elif multi_or_essay == "논술형":
-                    # answer(논술형)
-                    hwp.Run("MoveDocEnd")
-                    search_text(hwp, f"{headstring}_정답", direction="Backward")
-                    hwp.Run("TableCellBlock")
-                    hwp.Run("TableLowerCell")
-                    answer_text = extract_text_from_block(hwp)
-                    hwp.Run("Cancel")
-                                
-                order_num += 1
-                question_dict.update({
-                    'order_number': order_num,
-                    'multi_or_essay': multi_or_essay,
-                    'number': number,
-                    'detail_type': question_type_list[i],
-                    'question_text': question_text,
-                    'answer': answer_text,
-                    'score': score,
-                })
-                question_dict_list.append(question_dict)
-                
-                hwp.SetPos(*start_coor)
-                hwp.Run("MoveParaEnd")        
-            hwp.SetPos(*index_end_coordinate)
+            elif multi_or_essay == "논술형":
+                # answer(논술형)
+                hwp.Run("MoveDocEnd")
+                search_text(hwp, f"{headstring}_정답", direction="Backward")
+                hwp.Run("TableCellBlock")
+                hwp.Run("TableLowerCell")
+                answer = extract_text_from_block(hwp)
+                hwp.Run("CloseEx")
+                            
+            order_num += 1
+            question_dict.update({
+                'order_number': order_num,
+                'source': source,
+                'multi_or_essay': multi_or_essay,
+                'number': number,
+                'detail_type': question_type,
+                'question_text': question_text,
+                'answer': answer,
+                'score': score,
+            })
+
+            question_dict_list.append(question_dict)
+            
+            hwp.SetPos(*start_coor)   
+            hwp.Run("MoveParaEnd")
+
         pprint(question_dict_list,sort_dicts=False)
         
     except Exception as e:

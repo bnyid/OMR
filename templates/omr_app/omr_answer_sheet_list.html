@@ -211,6 +211,72 @@
   </div>
 </div>
 
+<!-- 시험지 선택 모달 -->
+<div
+  class="modal fade"
+  id="examSheetSelectModal"
+  tabindex="-1"
+  aria-hidden="true"
+>
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <!-- 모달 헤더 -->
+      <div class="modal-header">
+        <h5 class="modal-title">시험지 선택</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+
+      <!-- 모달 바디: 월별 필터, 시험명 검색, 시험지 목록 표시 -->
+      <div class="modal-body">
+        <div class="row mb-3">
+          <div class="col">
+            <label for="examNameSearch" class="form-label">시험명 검색</label>
+            <input
+              type="text"
+              id="examNameSearch"
+              class="form-control form-control-sm"
+              placeholder="시험명"
+            />
+          </div>
+          <div class="col-auto" style="padding-top: 30px">
+            <button id="searchExamBtn" class="btn btn-primary btn-sm">
+              검색
+            </button>
+          </div>
+        </div>
+
+        <table class="table table-bordered table-sm" id="examSheetTable">
+          <thead>
+            <tr>
+              <th>선택</th>
+              <th>시험명</th>
+              <th>총 문항수</th>
+              <th>생성일</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Ajax로 데이터 로딩 -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 모달 푸터 -->
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          취소
+        </button>
+        <button type="button" class="btn btn-success" id="confirmMatchBtn">
+          매칭
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   // 탭 전환 로직
   const unmatchedBtn = document.getElementById("unmatchedBtn");
@@ -310,52 +376,109 @@
       deleteSelected("matchedContainer");
     });
 
-  // (A) "매칭 & 채점" 버튼 예시
+  // "매칭 & 채점" 버튼
   document.getElementById("matchAndGradeBtn").addEventListener("click", () => {
-    const container = document.getElementById("unmatchedContainer");
-    const selected = container.querySelectorAll(
-      'input[name="selected_exam_identifier"]:checked'
-    );
-    if (selected.length === 0) {
-      alert("매칭&채점할 시험지를 선택하세요.");
-      return;
-    }
+    // 체크박스 선택 검사 등은 기존대로...
+    const modalEl = document.getElementById("examSheetSelectModal");
+    const modal = new bootstrap.Modal(modalEl);
 
-    // 예: 한번에 여러 exam_identifier를 보낼 수도 있고, 우선 첫번째만 처리 등...
-    const formData = {
-      exam_identifier_list: [],
-    };
-    selected.forEach((cb) => {
-      formData.exam_identifier_list.push(cb.value);
+    // (1) 모달 show
+    modal.show();
+
+    // (2) 모달이 실제로 보여지는 순간(shown.bs.modal)에 전체 시험지 목록 로드
+    modalEl.addEventListener("shown.bs.modal", onExamSheetModalShown, {
+      once: true,
+    });
+    //  → once: true 로 한 번만 실행 (매번 열 때마다 다시 실행하고 싶으면 제거)
+  });
+
+  async function onExamSheetModalShown() {
+    // (A) 검색창 초기화(원한다면)
+    document.getElementById("examNameSearch").value = "";
+
+    // (B) 전체 목록 로드 → q 파라미터 없이 or ?q=
+    const url = "/exam-sheet/api/exam_sheets/"; // 루트, 슬래시 정확히 맞추세요
+    const resp = await fetch(url); // ?q= 없이
+    const data = await resp.json();
+
+    // (C) 테이블에 표시
+    renderExamSheetTable(data);
+  }
+
+  function renderExamSheetTable(examList) {
+    const tbody = document.querySelector("#examSheetTable tbody");
+    tbody.innerHTML = "";
+    examList.forEach((exam) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="radio" name="selected_exam_sheet" value="${exam.id}" /></td>
+        <td>${exam.title}</td>
+        <td>${exam.total_questions}</td>
+        <td>${exam.created_at}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // (B) 검색 버튼 클릭 시 → 검색어 기반 재조회
+  document
+    .getElementById("searchExamBtn")
+    .addEventListener("click", async () => {
+      const examName = document.getElementById("examNameSearch").value.trim();
+      // /exam-sheet/api/exam_sheets/?q=중간고사 식으로 호출
+      const url = `/exam-sheet/api/exam_sheets/?q=${encodeURIComponent(
+        examName
+      )}`;
+      const resp = await fetch(url);
+      const data = await resp.json();
+
+      renderExamSheetTable(data);
     });
 
-    // 실제 로직
-    if (!confirm("선택된 시험지를 매칭 후 채점을 진행하시겠습니까?")) {
-      return;
-    }
+  // 모달 내부의 "매칭" 버튼
+  document
+    .getElementById("confirmMatchBtn")
+    .addEventListener("click", async () => {
+      // 1) 선택된 ExamSheet
+      const examSheetRadio = document.querySelector(
+        'input[name="selected_exam_sheet"]:checked'
+      );
+      if (!examSheetRadio) {
+        alert("시험지를 선택하세요.");
+        return;
+      }
+      const examSheetId = examSheetRadio.value;
 
-    // Ajax POST: 매칭 + 채점을 처리할 뷰에 요청
-    fetch("{% url 'omr_app:match_and_grade' %}", {
-      method: "POST",
-      headers: {
-        "X-CSRFToken": "{{ csrf_token }}",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(formData),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.status === "success") {
-          alert("매칭 & 채점이 완료되었습니다.");
-          window.location.reload();
-        } else {
-          alert(data.message || "매칭 & 채점 중 오류가 발생했습니다.");
-        }
-      })
-      .catch((err) => {
-        console.error(err);
-        alert("서버 오류가 발생했습니다.");
+      // 2) 체크된 OMR 식별자들
+      const container = document.getElementById("unmatchedContainer");
+      const selected = container.querySelectorAll(
+        'input[name="selected_exam_identifier"]:checked'
+      );
+      if (selected.length === 0) {
+        alert("OMR 식별자가 선택되지 않았습니다.");
+        return;
+      }
+      const examIdentifiers = Array.from(selected).map((cb) => cb.value);
+
+      // 3) 서버에 매칭 & 객관식 채점 요청
+      const resp = await fetch("{% url 'omr_app:match_and_auto_grade' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          exam_sheet_id: examSheetId,
+          exam_identifier_list: examIdentifiers,
+        }),
       });
-  });
+      const json = await resp.json();
+      if (json.status === "success") {
+        alert("매칭 및 객관식 채점을 완료했습니다.");
+        window.location.href = json.redirect_url;
+      } else {
+        alert(json.message || "매칭 실패");
+      }
+    });
 </script>
 {% endblock %}

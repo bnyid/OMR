@@ -1,0 +1,55 @@
+<!-- templates/omr_app/omr_grading_list.html -->
+
+{% extends "base.html" %} {% block content %}
+
+<div class="container mt-4">
+  <h1>채점 목록</h1>
+  <table id="gradingList" class="table table-striped">
+    <thead>
+      <tr>
+        <th>
+          <input type="checkbox" id="selectAll" class="form-check-input" />
+        </th>
+        <th>시험 식별자</th>
+        <th>시험 날짜</th>
+        <th>강사 코드</th>
+        <th>시험지명</th>
+        <th>채점 완료</th>
+        <th>작업</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for grouped_result in matched_grouped_results %}
+      <tr>
+        <td>
+          <input
+            type="checkbox"
+            class="form-check-input"
+            data-exam-identifier="{{ grouped_result.exam_identifier }}"
+          />
+        </td>
+        <td>{{ grouped_result.exam_identifier }}</td>
+        <td>{{ grouped_result.exam_date|date:"Y-m-d" }}</td>
+        <td>{{ grouped_result.teacher_code }}</td>
+        <td>{{ grouped_result.exam_sheet_title }}</td>
+
+        <td>{% if omr.is_graded %} 완료 {% else %} 미완료 {% endif %}</td>
+        <td>
+          <a
+            href="{% url 'omr_app:omr_grading_detail' grouped_result.exam_identifier %}"
+            class="btn btn-primary btn-sm"
+          >
+            채점
+          </a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6" class="text-center">채점할 시험이 없습니다.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

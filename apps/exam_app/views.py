@@ -12,7 +12,7 @@ import os
 from django.conf import settings
 import json
 
-from apps.exam_app.models import OriginalText, Passage, Question, Choice, ExamSheet, ExamSheetQuestionMapping
+from apps.exam_app.models import ExamSheet, Question
 from apps.exam_app.services import extract_exam_sheet_info
 
 def upload_exam_sheet(request):
@@ -56,9 +56,7 @@ def upload_exam(request):
 
 @require_POST
 def finalize_exam(request):
-    """
-    시험지를 최종 등록하는 뷰.
-    
+    """시험지를 최종 등록하는 뷰.
     1) 클라이언트에서 전달한 JSON 데이터에서 exam_name과 문제 데이터(extractedData)를 파싱합니다.
     2) exam_name을 이용하여 ExamSheet 객체를 생성합니다.
     3) 전달받은 문제 데이터를 순회하며 각 문제에 대해 Question 객체를 생성하고,
@@ -140,12 +138,13 @@ def finalize_exam(request):
             # bulk_create 로 한 번에 저장
             Question.objects.bulk_create(question_instances)
         
-        # 성공 응답: 등록된 시험지의 detail page URL 등을 함께 리턴 가능
+        # 성공 응답: 등록된 시험지의 detail page URL 등을 함께 리턴
+        redirect_url = reverse('exam_app:exam_sheet_detail', args=[exam_sheet.id])
         return JsonResponse({
             "status": "success",
-            "redirect_url": f"/exam_app/exam_sheet/{exam_sheet.id}/"  # 실제 URL에 맞게 조정
+            "redirect_url": redirect_url
         })
-    
+            
     except Exception as e:
         # 에러 발생 시 traceback 을 기록하는 등의 처리를 할 수 있음
         return JsonResponse({
@@ -153,6 +152,13 @@ def finalize_exam(request):
             "message": str(e)
         }, status=500)
         
+
+def exam_sheet_detail(request, pk):
+    exam_sheet = get_object_or_404(ExamSheet, pk=pk)
+    return render(request, 'exam_app/exam_sheet_detail.html', {
+        'exam_sheet': exam_sheet
+    })
+
         
         
 def exam_sheet_list(request):
@@ -170,9 +176,9 @@ def exam_sheet_list(request):
     exam_sheets = (ExamSheet.objects
         .annotate(
             # 객관식 문제(is_essay=False) 수
-            objective_count=Count('questions', filter=Q(questions__is_essay=False)),
+            objective_count=Count('questions', filter=Q(questions__multi_or_essay='객관식')),
             # 논술형 문제(is_essay=True) 수
-            essay_count=Count('questions', filter=Q(questions__is_essay=True)),
+            essay_count=Count('questions', filter=Q(questions__multi_or_essay='논술형')),
             omr_count=Count('omr_results', distinct=True), # related_name='omr_results'
         )
     )
@@ -192,62 +198,6 @@ def exam_sheet_list(request):
     })
 
 
-def exam_sheet_detail(request, pk):
-    exam_sheet = get_object_or_404(ExamSheet, pk=pk)
-
-    passages = Passage.objects.filter(questions__exam_sheets=exam_sheet).distinct()
-
-    passage_list = []
-    
-    for passage in passages:
-        # passage에 연결된 question(현재 exam_sheet에 속한 것만)
-        q_list = passage.questions.filter(exam_sheets=exam_sheet).order_by('id')
-        # 만약 2문항인지(is_double) 여부를 구분하고 싶다면:
-        is_double = (q_list.count() == 2)
-        print(f"[Debug] passage.id={passage.id}, passage.passage_source={passage.passage_source}, q_list.count={q_list.count()}")
-        # 여기서 question 정보를 좀 더 가공해서, 
-        # choices도 가져온 뒤 list로 넣어준다
-        question_data_list = []
-        passage_label_list = []    
-        for q in q_list:
-            
-            label = None
-            question_number = ExamSheetQuestionMapping.objects.get(question=q).question_number
-            if q.is_essay:
-                label = f"논술형{question_number}"
-            else: 
-                label = question_number
-                
-            passage_label_list.append(label)
-            
-            
-            choices = q.choices.all().order_by('choice_number')  # 객체 리스트
-            # 필요한 데이터를 dict로 만들어 append
-            question_data_list.append({
-                'question_text': q.question_text,
-                'question_text_extra': q.question_text_extra,
-                'question_is_essay': q.is_essay,
-                'question_number': question_number,
-                'answer': q.answer,               # 객관식 [2], 주관식 str
-                'explanation': q.explanation,     # 객관식 해설
-                'answer_format': q.answer_format, # 논술형 답안형식
-                'choices': choices,               # 객체 리스트
-            })
-
-        passage_list.append({
-            'passage': passage,
-            'question_list': question_data_list,
-            'is_double': is_double,
-            'passage_label_list': passage_label_list,
-        })
-
-    context = {
-        'exam_sheet': exam_sheet,
-        'passage_list': passage_list,
-    }
-    return render(request, 'exam_app/exam_sheet_detail.html', context)
-    
-    
 def exam_sheet_bulk_delete(request):
     """
     - POST 요청으로 넘어온 sheet_ids(JSON)들을 받아 일괄 삭제
@@ -266,3 +216,28 @@ def exam_sheet_bulk_delete(request):
             return JsonResponse({'status': 'error', 'message': str(e)})
     else:
         return JsonResponse({'status': 'error', 'message': 'Invalid request method.'})
+    
+    
+    
+def api_exam_sheets(request):
+    # 1) GET 파라미터에서 'q' (시험명 검색어)만 받는다.
+    q = request.GET.get('q', '').strip()
+    
+    # 2) 기본적으로 created_at 내림차순 정렬 (최신 생성 시험지가 먼저)
+    exam_sheets = ExamSheet.objects.all().order_by('-created_at')
+    
+    # 3) q가 있으면 제목(title)에 검색
+    if q:
+        exam_sheets = exam_sheets.filter(title__icontains=q)
+
+    # 4) JSON 변환
+    data = []
+    for e in exam_sheets:
+        data.append({
+            "id": e.id,
+            "title": e.title,
+            "total_questions": e.total_questions,
+            # 날짜/시간 형식 포맷
+            "created_at": e.created_at.strftime('%Y-%m-%d %H:%M'),
+        })
+    return JsonResponse(data, safe=False)

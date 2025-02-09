@@ -1,0 +1,332 @@
+<!-- templates/omr_app/omr_grading_detail.html -->
+{% extends 'base.html' %} {% load static %} {% block content %}
+
+<h3>{{ exam_identifier }} - "{{ exam_sheet.title }}" 매칭 완료</h3>
+
+{% if error_message %}
+<div class="alert alert-danger">{{ error_message }}</div>
+{% endif %}
+
+<!-- (1) 객관식 점수 요약 -->
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>학생</th>
+      <th>학교</th>
+      <th>석차</th>
+      <th>총점</th>
+      <th>객관식 점수합</th>
+      <th>논술형 점수합</th>
+      <th>작업</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for omr in omrs %}
+    <tr>
+      <td>{{ omr.student.name }}</td>
+      <td>{{ omr.student.school_name }} {{ omr.student.grade }}</td>
+      <td>{{ omr.total_rank_str }}</td>
+      <td>
+        {{ omr.objective_score_earned_sum|add:omr.essay_score_earned_sum }} /
+        <!-- line keeping -->
+        {{ omr.objective_score_total_sum|add:omr.essay_score_total_sum }}
+      </td>
+      <td>
+        {{ omr.objective_score_earned_sum }} / {{omr.objective_score_total_sum}}
+      </td>
+      <td>
+        {{ omr.essay_score_earned_sum }} / {{ omr.essay_score_total_sum }}
+      </td>
+
+      <td>
+        <button class="btn btn-secondary btn-sm">작업(미구현)</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- (2) 논술형 채점 버튼 -->
+<div class="text-end mb-3">
+  <button class="btn btn-primary" id="essayGradingBtn">논술형 채점하기</button>
+  <button class="btn btn-success" id="completeGradingBtn">완료</button>
+</div>
+
+<!-- (3) 논술형 채점 모달 -->
+<div class="modal fade" id="essayGradingModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">논술형 채점</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <!-- (A) 채점 안내 메시지 -->
+        <p>문항별로 모든 학생을 순회하면서 채점할 수 있습니다.</p>
+        <!-- 해당 논술형 문제의 발문 추가 -->
+        <div class="alert alert-info">
+          <span id="questionNumber"></span>
+          <span id="questionText"></span>
+        </div>
+
+        <!-- (B) 현재 채점 내용 표시 영역 -->
+        <div class="d-flex flex-wrap gap-3" id="essayGradingArea">
+          <div>
+            <img
+              id="essayImgView"
+              src=""
+              style="max-width: 600px; border: 1px solid #ccc"
+            />
+          </div>
+          <div>
+            <h2>학생: <span id="studentName"></span></h2>
+            <h2>
+              현재 점수: <span id="scoreDisplay"></span> /
+              <span id="totalScore"></span>
+            </h2>
+            <h2>적용 점수: <span id="scoreToApply"></span></h2>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="prevBtn">(←)이전</button>
+        <button class="btn btn-secondary" id="nextBtn">다음(→)</button>
+        <button class="btn btn-outline-primary" data-bs-dismiss="modal">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  let essayQuestions = [];
+  let omrList = [];
+  let currentQuestionIndex = 0;
+  let currentStudentIndex = 0;
+  let scoreInput = "";
+
+  // DOM 요소 캐싱
+  const essayGradingBtn = document.getElementById("essayGradingBtn");
+  const essayModal = new bootstrap.Modal(
+    document.getElementById("essayGradingModal")
+  );
+  const essayImgView = document.getElementById("essayImgView");
+  const studentNameSpan = document.getElementById("studentName");
+  const scoreDisplay = document.getElementById("scoreDisplay");
+  const totalScoreSpan = document.getElementById("totalScore");
+  const prevBtn = document.getElementById("prevBtn");
+  const nextBtn = document.getElementById("nextBtn");
+  const questionNumberSpan = document.getElementById("questionNumber");
+  const questionTextSpan = document.getElementById("questionText");
+  const scoreToApplySpan = document.getElementById("scoreToApply");
+  const essayModalEl = document.getElementById("essayGradingModal");
+  // (A) "논술형 채점하기" 버튼 클릭 → 모달 띄우기 + data 로드
+  essayGradingBtn.addEventListener("click", () => {
+    loadEssayData();
+  });
+
+  async function loadEssayData() {
+    const examIdentifier = "{{ exam_identifier }}"; // Django 템플릿에서 전달되는 형태
+    const resp = await fetch(
+      `{% url 'omr_app:fetch_essay_data' %}?exam_identifier=${examIdentifier}` // 쿼리 파라미터는 백엔드에서 request.GET.get('exam_identifier')로 받음
+    );
+    const data = await resp.json();
+    if (data.status === "success") {
+      essayQuestions = data.essay_questions; // [{id,order_number,score,...}, ...]
+      omrList = data.omr_list; // [{id, student_name, essay_images: [...], answers: [...]} ...]
+      currentQuestionIndex = 0;
+      currentStudentIndex = 0;
+
+      essayModal.show();
+      showCurrent();
+    } else {
+      alert(data.message || "데이터 로드 실패");
+    }
+  }
+
+  function showCurrent() {
+    const q = essayQuestions[currentQuestionIndex];
+    const o = omrList[currentStudentIndex];
+
+    // 문항제목
+    questionNumberSpan.textContent = `논술형 #${q.number} - `;
+
+    // 문제 발문 표시 (question_text가 존재하는 경우)
+    questionTextSpan.textContent = q.question_text || "";
+
+    // 학생이름
+    studentNameSpan.textContent = o.student_name || "미매칭";
+
+    // 주관식 이미지
+    const foundImage = o.essay_images.find(
+      (img) => img.question_number === q.number
+    );
+    essayImgView.src = foundImage ? foundImage.image_url : "";
+
+    // 현재 점수
+    const ans = o.answers.find((a) => a.question_id === q.id);
+    if (ans) {
+      scoreDisplay.textContent = ans.score_earned;
+      totalScoreSpan.textContent = ans.total_score;
+    } else {
+      // 만약 데이터 없으면 문항 배점
+      scoreDisplay.textContent = q.score;
+      totalScoreSpan.textContent = q.score;
+    }
+  }
+
+  function resetScore() {
+    const q = essayQuestions[currentQuestionIndex];
+    const o = omrList[currentStudentIndex];
+
+    let ans = o.answers.find((a) => a.question_id === q.id);
+    if (!ans) {
+      ans = { question_id: q.id, score_earned: q.score, total_score: q.score };
+      o.answers.push(ans);
+    }
+    ans.score_earned = ans.total_score;
+    scoreDisplay.textContent = ans.total_score;
+
+    updateEssayScore(o.id, q.id, ans.score_earned);
+  }
+
+  async function updateEssayScore(omrResultId, questionId, newScore) {
+    try {
+      const resp = await fetch("{% url 'omr_app:grade_essay_update' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          omr_result_id: omrResultId,
+          question_id: questionId,
+          new_score: newScore,
+        }),
+      });
+      const data = await resp.json();
+      return data; // sata.status가 "success" 또는 "error"를 반환할 것임
+    } catch (e) {
+      console.error(e);
+      alert("서버 오류 발생");
+    }
+  }
+
+  // "이전" / "다음" 버튼
+  prevBtn.addEventListener("click", () => moveToPrev());
+  nextBtn.addEventListener("click", () => moveToNext());
+
+  function moveToNext() {
+    currentStudentIndex++;
+    if (currentStudentIndex >= omrList.length) {
+      // 다음 문항
+      currentStudentIndex = 0;
+      currentQuestionIndex++;
+      if (currentQuestionIndex >= essayQuestions.length) {
+        alert("모든 문항 채점을 완료했습니다.");
+        essayModal.hide();
+        return;
+      }
+    }
+    showCurrent();
+  }
+
+  function moveToPrev() {
+    currentStudentIndex--;
+    if (currentStudentIndex < 0) {
+      currentQuestionIndex--;
+      if (currentQuestionIndex < 0) {
+        alert("더 이상 이전 문항이 없습니다.");
+        currentQuestionIndex = 0;
+        currentStudentIndex = 0;
+        return;
+      }
+      currentStudentIndex = omrList.length - 1;
+    }
+    showCurrent();
+  }
+
+  // 키보드 이벤트 리스너
+  document.addEventListener("keydown", (e) => {
+    // 모달이 보이는 경우에만 동작 (부트스트랩 모달의 'show' 클래스 확인)
+    if (!essayModalEl.classList.contains("show")) return;
+
+    // 숫자(0~9) 입력 시: scoreInput에 누적
+    if (e.key >= "0" && e.key <= "9") {
+      scoreInput += e.key;
+      scoreToApplySpan.textContent = scoreInput;
+    }
+
+    // 소수점 입력 (이미 입력되지 않은 경우)
+    else if (e.key === "." && !scoreInput.includes(".")) {
+      if (!scoreInput.includes(".")) {
+        scoreInput = scoreInput === "" ? "0." : scoreInput + ".";
+        scoreToApplySpan.textContent = scoreInput;
+      }
+    }
+
+    // Backspace 키 : 마지막 문자 제거
+    else if (e.key === "Backspace") {
+      scoreInput = scoreInput.slice(0, -1);
+      scoreToApplySpan.textContent = scoreInput;
+    }
+
+    // 백틱(`) 키 : 만점(= totalScoreSpan의 값)을 입력
+    else if (e.key === "`") {
+      scoreInput = totalScoreSpan.textContent;
+      scoreToApplySpan.textContent = scoreInput;
+    }
+
+    // Enter 키 : 입력한 점수를 저장한 후 다음 학생/문항으로 이동
+    else if (e.key === "Enter") {
+      if (scoreInput !== "") {
+        const newScore = parseFloat(scoreInput);
+        const q = essayQuestions[currentQuestionIndex];
+        const o = omrList[currentStudentIndex];
+
+        if (newScore > parseFloat(q.score)) {
+          alert("입력된 점수가 문제 점수를 초과합니다.");
+          return; // [UI 업데이트와 다음문제로의 이동]을 중단
+        }
+
+        let ans = o.answers.find((a) => a.question_id === q.id);
+        if (!ans) {
+          ans = {
+            question_id: q.id,
+            score_earned: q.score,
+            total_score: q.score,
+          };
+          s.answers.push(ans);
+        }
+        ans.score_earned = newScore;
+        scoreDisplay.textContent = newScore;
+
+        // 서버 업데이트
+        updateEssayScore(o.id, q.id, newScore);
+
+        // 초기화 후 다음으로 이동
+        scoreInput = "";
+        scoreToApplySpan.textContent = "";
+        moveToNext();
+      }
+    }
+    // 좌우 방향키 : 각각 이전/다음 이동
+    else if (e.key === "ArrowLeft") {
+      moveToPrev();
+    } else if (e.key === "ArrowRight") {
+      moveToNext();
+    }
+
+    // 모달이 완전히 닫혔을 때 페이지 새로고침
+    essayModalEl.addEventListener("hidden.bs.modal", function () {
+      window.location.reload();
+    });
+  });
+</script>
+
+{% endblock %}

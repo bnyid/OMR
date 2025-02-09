@@ -24,10 +24,10 @@ class Question(models.Model):
     )
     order_number = models.PositiveIntegerField('문항 번호')
     multi_or_essay = models.CharField('문항 유형', max_length=20)  # 예: "객관식", "논술형"
-    number = models.PositiveIntegerField('유형 내 번호')
+    number = models.PositiveIntegerField('유형 내 번호') # 1부터 시작
     detail_type = models.CharField('세부 유형', max_length=50, null=True, blank=True)
     question_text = models.TextField('문제 본문')
-    answer = models.TextField('정답')
+    answer = models.JSONField('정답')
     score = models.FloatField('배점')
     
     created_at = models.DateTimeField('생성일', auto_now_add=True)
@@ -36,7 +36,6 @@ class Question(models.Model):
         verbose_name = '문항'
         verbose_name_plural = '문항들'
         ordering = ['order_number']
-        unique_together = ['exam_sheet', 'multi_or_essay', 'number']
         
     def __str__(self):
         return f"{self.exam_sheet.title} - Q{self.order_number}"

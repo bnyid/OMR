@@ -1,3 +1,4 @@
+# apps/omr_app/templatetags/custom_filters.py
 from django import template
 from datetime import datetime
 
@@ -20,3 +21,5 @@ def format_date_with_day(value):
         day_name = DAYS[value.weekday()]  # weekday()는 0(월요일)부터 6(일요일)까지 반환
         return value.strftime(f'%y.%m.%d({day_name})')  # %Y가 아닌 %y를 사용하여 연도를 2자리로 표시
     return ''
+
+

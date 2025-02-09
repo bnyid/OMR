@@ -11,5 +11,11 @@ urlpatterns = [
     path('exam_sheet_list/', views.exam_sheet_list, name='exam_sheet_list'),
     path('exam_sheet_detail/<int:pk>/', views.exam_sheet_detail, name='exam_sheet_detail'),
     path('exam_sheet_bulk_delete/', views.exam_sheet_bulk_delete, name='exam_sheet_bulk_delete'),
+    path('api/exam_sheets/', views.api_exam_sheets, name='api_exam_sheets'),
     # 기타 필요 뷰들...
 ]
+
+
+
+
+
