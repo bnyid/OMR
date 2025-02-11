@@ -15,6 +15,7 @@
       <th>학교</th>
       <th>석차</th>
       <th>총점</th>
+      <th>단어점수</th>
       <th>객관식 점수합</th>
       <th>논술형 점수합</th>
       <th>작업</th>
@@ -27,10 +28,12 @@
       <td>{{ omr.student.school_name }} {{ omr.student.grade }}</td>
       <td>{{ omr.total_rank_str }}</td>
       <td>
-        {{ omr.objective_score_earned_sum|add:omr.essay_score_earned_sum }} /
+        {{omr.voca_score_earned|add:omr.objective_score_earned_sum|add:omr.essay_score_earned_sum}}
+        /
         <!-- line keeping -->
-        {{ omr.objective_score_total_sum|add:omr.essay_score_total_sum }}
+        {{omr.voca_score_possible|add:omr.objective_score_total_sum|add:omr.essay_score_total_sum}}
       </td>
+      <td>{{ omr.voca_score_earned }} / {{ omr.voca_score_possible }}</td>
       <td>
         {{ omr.objective_score_earned_sum }} / {{omr.objective_score_total_sum}}
       </td>
@@ -46,13 +49,156 @@
   </tbody>
 </table>
 
-<!-- (2) 논술형 채점 버튼 -->
+<!-- (2) 버튼들 -->
 <div class="text-end mb-3">
+  <button class="btn btn-warning" id="vocaPossibleBtn">
+    단어총점 입력하기
+  </button>
+  <button class="btn btn-info" id="vocaScoreBtn">단어점수 입력하기</button>
   <button class="btn btn-primary" id="essayGradingBtn">논술형 채점하기</button>
-  <button class="btn btn-success" id="completeGradingBtn">완료</button>
+  <a href="{% url 'omr_app:omr_grading_list' %}">
+    <button class="btn btn-success" id="completeGradingBtn">완료</button>
+  </a>
 </div>
 
-<!-- (3) 논술형 채점 모달 -->
+<!-- (3) 단어 총점 입력 모달 -->
+<div class="modal fade" id="vocaPossibleModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">단어 총점 입력하기</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form id="vocaPossibleForm">
+          <div class="mb-3">
+            <label for="vocaPossibleInput" class="form-label"
+              >단어 총 배점</label
+            >
+            <input
+              type="number"
+              id="vocaPossibleInput"
+              class="form-control"
+              placeholder="총 배점 입력"
+              autocomplete="off"
+            />
+          </div>
+        </form>
+        <!-- 상태 메시지를 표시할 영역 -->
+        <div id="vocaPossibleStatusMessage" class="mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button
+          type="button"
+          class="btn btn-success"
+          id="submitVocaPossibleBtn"
+        >
+          확인 (Enter)
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-primary"
+          data-bs-dismiss="modal"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- (4) 단어점수 입력 모달 -->
+<div class="modal fade" id="vocaScoreModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">단어점수 입력하기</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form id="vocaScoreForm">
+          <div class="mb-3">
+            <label for="vocaNameInput" class="form-label">학생 이름</label>
+            <input
+              type="text"
+              id="vocaNameInput"
+              class="form-control"
+              placeholder="학생 이름 입력"
+              autocomplete="off"
+            />
+          </div>
+          <div class="mb-3">
+            <label for="vocaScoreInput" class="form-label">점수</label>
+            <input
+              type="number"
+              id="vocaScoreInput"
+              class="form-control"
+              placeholder="점수 입력"
+              autocomplete="off"
+            />
+          </div>
+        </form>
+        <!-- 상태 메시지를 표시할 영역 -->
+        <div id="vocaStatusMessage" class="mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-success" id="submitVocaScoreBtn">
+          채점 (Enter)
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-primary"
+          data-bs-dismiss="modal"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- (5) 후보 선택 모달 -->
+<div class="modal fade" id="candidateSelectModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">동명이인 후보 선택</h5>
+        <button
+          type="button"
+          class="btn-close"
+          data-bs-dismiss="modal"
+        ></button>
+      </div>
+      <div class="modal-body">
+        <form id="candidateSelectForm">
+          <div id="candidateListContainer"></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-success" id="confirmCandidateBtn">
+          확인
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-primary"
+          data-bs-dismiss="modal"
+        >
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- (6) 논술형 채점 모달 -->
 <div class="modal fade" id="essayGradingModal" tabindex="-1">
   <div class="modal-dialog modal-xl">
     <div class="modal-content">
@@ -370,6 +516,272 @@
     essayModalEl.addEventListener("hidden.bs.modal", function () {
       window.location.reload();
     });
+  });
+
+  // 단어 총점 입력 모달 관련 DOM 요소
+  const vocaPossibleBtn = document.getElementById("vocaPossibleBtn");
+  const vocaPossibleModalEl = document.getElementById("vocaPossibleModal");
+  const vocaPossibleModal = new bootstrap.Modal(vocaPossibleModalEl);
+  const vocaPossibleInput = document.getElementById("vocaPossibleInput");
+  const submitVocaPossibleBtn = document.getElementById(
+    "submitVocaPossibleBtn"
+  );
+  const vocaPossibleStatusMessage = document.getElementById(
+    "vocaPossibleStatusMessage"
+  );
+
+  // [단어 총점 입력하기] 버튼 클릭 시 모달 표시 및 입력창 포커스
+  vocaPossibleBtn.addEventListener("click", () => {
+    vocaPossibleModal.show();
+    setTimeout(() => {
+      vocaPossibleInput.focus();
+    }, 600);
+  });
+
+  // 단어 총점 입력 모달에서 Enter 키 이벤트 처리 (입력창에서 Enter를 누르면 제출)
+  vocaPossibleInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitVocaPossible();
+    }
+  });
+
+  submitVocaPossibleBtn.addEventListener("click", submitVocaPossible);
+
+  async function submitVocaPossible() {
+    const newPossible = vocaPossibleInput.value.trim();
+    if (isNaN(newPossible) || newPossible === "") {
+      vocaPossibleStatusMessage.textContent = "총 배점을 올바르게 입력하세요.";
+      vocaPossibleStatusMessage.className = "mt-2 text-danger";
+      vocaPossibleInput.focus();
+      return;
+    }
+
+    const csrftoken = document.querySelector(
+      "[name=csrfmiddlewaretoken]"
+    ).value;
+
+    try {
+      const resp = await fetch("{% url 'omr_app:update_voca_possible' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrftoken,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          exam_identifier: "{{ exam_identifier }}",
+          new_possible: newPossible,
+        }),
+      });
+      const data = await resp.json();
+      if (data.status === "success") {
+        vocaPossibleStatusMessage.textContent = `단어 총 배점이 ${data.new_possible}점으로 업데이트되었습니다. (업데이트 건수: ${data.updated_count})`;
+        vocaPossibleStatusMessage.className = "mt-2 text-success";
+      } else {
+        vocaPossibleStatusMessage.textContent =
+          "단어 총 배점 업데이트 실패: " + data.message;
+        vocaPossibleStatusMessage.className = "mt-2 text-danger";
+      }
+    } catch (e) {
+      console.error("단어 총 배점 업데이트 중 오류 발생:", e);
+      vocaPossibleStatusMessage.textContent =
+        "단어 총 배점 업데이트 중 오류 발생";
+      vocaPossibleStatusMessage.className = "mt-2 text-danger";
+    }
+
+    // 입력 초기화 후 입력창에 포커스
+    vocaPossibleInput.value = "";
+    vocaPossibleInput.focus();
+  }
+
+  // 단어점수 입력 모달 관련 DOM 요소
+  const vocaScoreBtn = document.getElementById("vocaScoreBtn");
+  const vocaScoreModalEl = document.getElementById("vocaScoreModal");
+  const vocaScoreModal = new bootstrap.Modal(vocaScoreModalEl);
+  const vocaNameInput = document.getElementById("vocaNameInput");
+  const vocaScoreInput = document.getElementById("vocaScoreInput");
+  const submitVocaScoreBtn = document.getElementById("submitVocaScoreBtn");
+  const vocaStatusMessage = document.getElementById("vocaStatusMessage");
+  const examIdentifier = "{{ exam_identifier }}";
+
+  // 후보 선택 모달 관련 DOM 요소
+  const candidateSelectModalEl = document.getElementById(
+    "candidateSelectModal"
+  );
+  const candidateSelectModal = new bootstrap.Modal(candidateSelectModalEl);
+  const candidateListContainer = document.getElementById(
+    "candidateListContainer"
+  );
+  const confirmCandidateBtn = document.getElementById("confirmCandidateBtn");
+
+  // [단어점수 입력하기] 버튼 클릭 시 모달 표시 및 이름 입력창 자동 포커스
+  vocaScoreBtn.addEventListener("click", () => {
+    vocaScoreModal.show();
+    setTimeout(() => {
+      vocaNameInput.focus();
+    }, 700);
+  });
+
+  // Tab 키 이벤트: 이름 입력창 <-> 점수 입력창 이동
+  vocaNameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      vocaScoreInput.focus();
+    }
+  });
+  vocaScoreInput.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      vocaNameInput.focus();
+    }
+  });
+  // 점수 입력창에서 Enter 키 이벤트 처리
+  vocaScoreInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitVocaScore();
+    }
+  });
+
+  submitVocaScoreBtn.addEventListener("click", submitVocaScore);
+
+  async function submitVocaScore() {
+    const vocaName = vocaNameInput.value.trim();
+    const vocaScore = vocaScoreInput.value.trim();
+
+    // 간단한 유효성 검사
+    if (!vocaName) {
+      alert("학생 이름을 입력하세요.");
+      vocaNameInput.focus();
+      return;
+    }
+    if (isNaN(vocaScore)) {
+      alert("점수를 올바르게 입력하세요.");
+      vocaScoreInput.focus();
+      return;
+    }
+
+    // CSRF 토큰 가져오기
+    const csrftoken = document.querySelector(
+      "[name=csrfmiddlewaretoken]"
+    ).value;
+
+    // AJAX 요청 : exam_identifier와 학생 이름을 기준으로 OMRResult 객체를 찾고 voca_score_earned 업데이트
+    try {
+      const resp = await fetch("{% url 'omr_app:grade_voca_update' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrftoken,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          exam_identifier: examIdentifier,
+          voca_name: vocaName,
+          new_score: vocaScore,
+        }),
+      });
+      const data = await resp.json();
+      if (data.status === "success") {
+        vocaStatusMessage.textContent = `${data.school} ${data.student_name} 학생의 단어점수를 ${data.voca_score}점으로 업데이트 했습니다.`;
+        vocaStatusMessage.className = "mt-2 text-success";
+
+        vocaNameInput.value = "";
+        vocaScoreInput.value = "";
+        vocaNameInput.focus();
+      } else if (data.status === "multiple") {
+        // 후보 목록이 있을 경우, 후보 선택 모달을 띄워서 후보 목록을 보여줌
+        populateCandidateModal(data.candidates);
+      } else {
+        vocaStatusMessage.textContent =
+          "단어점수 업데이트 실패: " + data.message;
+        vocaStatusMessage.className = "mt-2 text-danger";
+      }
+    } catch (e) {
+      console.error("단어 점수 업데이트 중 오류 발생:", e);
+      alert("단어점수 업데이트 중 오류 발생");
+    }
+  }
+
+  // 후보 목록 모달에 후보들을 채워넣는 함수
+  function populateCandidateModal(candidates) {
+    // candidates는 candidate 리스트 (각 항목에 "id", "student__student_code", "student__school_name", "student__name" 등이 있음)
+    candidateListContainer.innerHTML = ""; // 초기화
+    candidates.forEach((cand, index) => {
+      const radioId = "candidateRadio_" + index;
+      const div = document.createElement("div");
+      div.className = "form-check";
+      div.innerHTML = `
+        <input class="form-check-input" type="radio" name="candidateRadio" id="${radioId}" value="${cand.id}">
+        <label class="form-check-label" for="${radioId}">
+          ${cand.student__school_name} ${cand.student__student_code} ${cand.student__name}
+        </label>
+      `;
+      candidateListContainer.appendChild(div);
+    });
+    // 후보 선택 모달 표시
+    candidateSelectModal.show();
+  }
+
+  // 후보 선택 모달의 확인 버튼 클릭 시 처리
+  confirmCandidateBtn.addEventListener("click", async () => {
+    const selectedRadio = document.querySelector(
+      'input[name="candidateRadio"]:checked'
+    );
+    if (!selectedRadio) {
+      alert("하나의 후보를 선택하세요.");
+      return;
+    }
+    const candidateId = selectedRadio.value;
+    // 다시 CSRF 토큰 가져오기
+    const csrftoken = document.querySelector(
+      "[name=csrfmiddlewaretoken]"
+    ).value;
+    // vocaName, vocaScore는 기존 입력 모달에 남아있으므로 재사용
+    const vocaName = vocaNameInput.value.trim();
+    const vocaScore = vocaScoreInput.value.trim();
+    try {
+      const resp = await fetch("{% url 'omr_app:grade_voca_update' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrftoken,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          exam_identifier: examIdentifier,
+          voca_name: vocaName,
+          new_score: vocaScore,
+          candidate_id: candidateId,
+        }),
+      });
+      const data = await resp.json();
+      if (data.status === "success") {
+        vocaStatusMessage.textContent = `${data.school} ${data.student_id} ${data.student_name} 학생의 단어점수를 ${data.voca_score}점으로 업데이트 했습니다.`;
+        vocaStatusMessage.className = "mt-2 text-success";
+        // 초기화 및 후보 모달 닫기
+        vocaNameInput.value = "";
+        vocaScoreInput.value = "";
+        vocaNameInput.focus();
+        candidateSelectModal.hide();
+      } else {
+        vocaStatusMessage.textContent =
+          "단어점수 업데이트 실패: " + data.message;
+        vocaStatusMessage.className = "mt-2 text-danger";
+      }
+    } catch (e) {
+      console.error("후보 선택 후 업데이트 중 오류 발생:", e);
+      vocaStatusMessage.textContent = "후보 선택 후 업데이트 중 오류 발생";
+      vocaStatusMessage.className = "mt-2 text-danger";
+    }
+  });
+
+  // 단어 총점 입력 모달이 완전히 닫힐 때 페이지 새로고침
+  vocaPossibleModalEl.addEventListener("hidden.bs.modal", function () {
+    window.location.reload();
+  });
+
+  // 단어 점수 입력 모달이 완전히 닫힐 때 페이지 새로고침
+  vocaScoreModalEl.addEventListener("hidden.bs.modal", function () {
+    window.location.reload();
   });
 </script>
 

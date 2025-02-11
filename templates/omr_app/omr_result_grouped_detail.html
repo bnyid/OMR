@@ -16,8 +16,9 @@
     <tr>
       <td>{{ result.exam_date }}</td>
       <td>
-        {% if result.student %} {{ result.student.name }} {% else %} {{
-        result.unmatched_student_name }} {% endif %}
+        {% if result.student %} {{ result.student.name }} {% else %}
+        <!-- line keeping-->
+        {{ result.unmatched_student_name }} {% endif %}
       </td>
       <td>{{ result.is_matched|yesno:"매칭완료,미매칭" }}</td>
       <td>{{ result.created_at|date:"Y-m-d H:i" }}</td>

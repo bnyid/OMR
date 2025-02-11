@@ -1,7 +1,13 @@
+# apps/student_app/views.py
+
 from django.shortcuts import render, get_object_or_404
-from django.db.models import Value, DateField, Q
+from django.db.models import Value, DateField, Q, Sum, Avg
 from django.db.models.functions import Coalesce
 
+
+
+
+from apps.omr_app.models import OMRResult
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
@@ -78,14 +84,33 @@ distinct() : unique()와 같은 기능 (중복된 값 제외)
 
 def student_detail(request, student_id):
     student = get_object_or_404(Student, id=student_id)
-
+    omr_results = OMRResult.objects.filter(student=student).order_by('-exam_date')
     
+    for omr in omr_results:
+        same_identifier_omrs = OMRResult.objects.filter(exam_identifier=omr.exam_identifier)
+        omr.average_score = same_identifier_omrs.aggregate(avg=Avg('total_score_earned'))['avg'] or 0
+    # 각 OMR 결과에 대해 등수 계산
+    for omr in omr_results:
+        # 같은 시험을 본 OMR들을 점수 내림차순으로 정렬
+        same_identifier_omrs = OMRResult.objects.filter(exam_identifier=omr.exam_identifier).order_by('-total_score_earned')
+        
+        # 현재 학생의 등수 계산
+        rank = 1
+        for other_omr in same_identifier_omrs:
+            if other_omr.total_score_earned > omr.total_score_earned:
+                rank += 1
+        omr.rank = rank
+        omr.omrs_count = same_identifier_omrs.count()
+        
     return render(request, 'student_app/student_detail.html', {
         'student': student,
+        'omr_results': omr_results
     })
     
+        
     
     
+
 @require_POST
 def student_add(request):
     if request.method == 'POST':

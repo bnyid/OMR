@@ -26,14 +26,24 @@ class OMRResult(models.Model):
     class_name = models.CharField('반이름', max_length=20, null=True, blank=True)
     omr_name = models.CharField('OMR 이름', max_length=50, default='', blank=True)
     
+    
     created_at = models.DateTimeField('생성일', auto_now_add=True)
     
     front_page = models.ImageField('OMR 앞면 이미지', upload_to='omr_front_pages/', null=True, blank=True)
     
     is_graded = models.BooleanField('채점 완료 여부', default=False)
     
+    total_score_earned = models.FloatField('총 획득 점수', default=0)
+    total_score_possible = models.FloatField('총 배점', default=0)
+    voca_score_earned = models.FloatField('어휘 획득 점수', default=0)
+    voca_score_possible = models.FloatField('어휘 배점', default=0)
+    
+
+    
     class Meta:
         verbose_name = 'OMR 결과'
+
+
         verbose_name_plural = 'OMR 결과들'
 
     def save(self, *args, **kwargs):
@@ -86,6 +96,8 @@ class OMRStudentAnswer(models.Model):
         on_delete=models.CASCADE,
         related_name='student_answers'
     )
+
+
 
     # 복수응답인 경우, ex) [2,3] 형태도 가능
     # 단일응답 ex) 2, 혹은 문자열 "2"
@@ -144,5 +156,10 @@ class OMRStudentAnswer(models.Model):
             self.omr_result.is_graded = True
             self.omr_result.save(update_fields=['is_graded'])
         
-            
+        # OMRResult에 연결된 모든 답안의 score_earned 총합을 계산하여 필드 업데이트
+        from django.db.models import Sum
+        total = self.omr_result.student_answers.aggregate(total=Sum('score_earned'))['total'] or 0.0
+        if self.omr_result.total_score_earned != total:
+            self.omr_result.total_score_earned = total
+            self.omr_result.save(update_fields=['total_score_earned'])      
 

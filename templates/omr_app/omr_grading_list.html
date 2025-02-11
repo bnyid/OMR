@@ -39,7 +39,7 @@
         <td>{{ grouped_result.teacher_code }}</td>
         <td>{{ grouped_result.exam_sheet_title }}</td>
 
-        <td>{% if omr.is_graded %} 완료 {% else %} 미완료 {% endif %}</td>
+        <td>구현중</td>
         <td>
           <a
             href="{% url 'omr_app:omr_grading_detail' grouped_result.exam_identifier %}"

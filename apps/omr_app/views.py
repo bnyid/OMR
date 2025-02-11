@@ -386,9 +386,15 @@ def match_and_auto_grade(request):
 
     # 2) OMRResult update
     omr_qs = OMRResult.objects.filter(exam_identifier__in=exam_identifiers, exam_sheet=None)
-    print(f"매칭되지 않은 OMRResult {omr_qs.count()}개를 찾았습니다..")
     omr_list = list(omr_qs)
-    omr_qs.update(exam_sheet=exam_sheet)
+    
+    # 시험지의 총점계산
+    exam_total_score_possible = exam_sheet.questions.aggregate(total=Sum('score'))['total'] or 0
+    
+    # omr-시험지 연결, omr에 시험지 총점 업데이트
+    omr_qs.update(exam_sheet=exam_sheet,total_score_possible=exam_total_score_possible)
+    
+
 
     # 3) 객관식 문항 목록
     multi_qs = exam_sheet.questions.filter(multi_or_essay='객관식')
@@ -469,8 +475,14 @@ def omr_grading_detail(request, exam_identifier):
         omr.essay_score_earned_sum = essay_answers.aggregate(sum=Sum('score_earned'))['sum'] or 0.0
         omr.essay_score_total_sum = essay_answers.aggregate(sum=Sum('total_score'))['sum'] or 0.0
         
-        omr.total_score_earned = omr.objective_score_earned_sum + omr.essay_score_earned_sum
-    
+        omr.voca_score_earned = omr.voca_score_earned or 0.0
+        omr.voca_score_possible = omr.voca_score_possible or 0.0
+        
+        omr.total_score_earned = omr.objective_score_earned_sum + omr.essay_score_earned_sum + omr.voca_score_earned
+        omr.total_score_possible = omr.objective_score_total_sum + omr.essay_score_total_sum + omr.voca_score_possible
+        
+        
+
     # 총점을 기준으로 내림차순 정렬한 후, groupby를 이용해 같은 총점을 가진 OMR들을 그룹화
     sorted_omrs = sorted(omrs, key=lambda o: o.total_score_earned, reverse=True)
     
@@ -488,7 +500,7 @@ def omr_grading_detail(request, exam_identifier):
                 omr.total_rank_str = f"{rank} / {total_omr_count}명"
         rank += group_size
         
-
+    
     # 2) 논술형 문항들만 별도 리스트
     essay_questions = exam_sheet.questions.filter(multi_or_essay='논술형').order_by('number')
 
@@ -496,11 +508,11 @@ def omr_grading_detail(request, exam_identifier):
     return render(request, 'omr_app/omr_grading_detail.html', {
         'exam_identifier': exam_identifier,
         'exam_sheet': exam_sheet,
-        'omrs': omrs,  # 이 omr에는 임시로 추가한 correct_count, earned_sum, total_sum 추가되어 있음
+        'omrs': sorted_omrs,  # 이 omr에는 임시로 추가한 correct_count, earned_sum, total_sum 추가되어 있음
         'essay_questions': essay_questions,
     })
-    
-    
+
+
 
 def fetch_essay_data(request):
     """
@@ -621,6 +633,7 @@ def omr_grading_list(request):
     """
     매칭완료 OMR 목록 페이지
     """
+    
     # 시험지와 매치된 OMR 필터링 (exam_sheet가 null이 아닌 것)
     matched_grouped_results = (
         OMRResult.objects.filter(exam_sheet__isnull=False)
@@ -630,9 +643,10 @@ def omr_grading_list(request):
             latest_created_at=Max('created_at'),
             exam_date=Min('exam_date'),
             teacher_code=F('teacher_code'),
-            exam_sheet_title=F('exam_sheet__title')
+            exam_sheet_title=F('exam_sheet__title'),
         )
         .order_by('-latest_created_at')
+
 
     )
 
@@ -640,6 +654,94 @@ def omr_grading_list(request):
         'matched_grouped_results': matched_grouped_results
     })
 
+
+
+@require_POST
+def update_voca_possible(request):
+    """
+    exam_identifier와 new_possible(단어 총점)을 받아서,
+    해당 exam_identifier에 속하는 모든 OMRResult 객체의
+    voca_score_possible 필드를 new_possible 값으로 업데이트합니다.
+    """
+    data = json.loads(request.body)
+    exam_identifier = data.get('exam_identifier')
+    new_possible = data.get('new_possible')
+    
+    if not exam_identifier or new_possible is None:
+        return JsonResponse({"status": "error", "message": "필수 정보가 누락되었습니다."}, status=400)
+    
+    try:
+        updated_count = OMRResult.objects.filter(exam_identifier=exam_identifier).update(voca_score_possible=new_possible)
+        return JsonResponse({
+            "status": "success",
+            "updated_count": updated_count,
+            "new_possible": new_possible
+        })
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+    
     
 
+@require_POST
+def grade_voca_update(request):
+    """
+    exam_identifier, voca_name, new_score, [candidate_id]를 받아서,
+    candidate_id가 제공되면 해당 OMRResult의 voca_score_earned를 업데이트하고,
+    candidate_id가 없을 경우 exam_identifier와 voca_name에 해당하는 OMRResult를 찾는다.
+      - 만약 후보가 2명 이상이면 후보 목록을 반환 (status: "multiple")
+      - 후보가 1명이면 바로 업데이트.
+    """
+    data = json.loads(request.body)
+    exam_identifier = data.get('exam_identifier')
+    voca_name = data.get('voca_name')
+    new_score = data.get('new_score')
+    candidate_id = data.get('candidate_id')  # 선택적
+    
+    
+    
+    
+    if not exam_identifier or not voca_name or new_score is None:
+        return JsonResponse({"status": "error", "message": "필수 정보가 누락되었습니다."}, status=400)
+    
+    
+    if candidate_id:
+        # candidate_id가 제공되면 해당 OMRResult를 바로 업데이트
+        omr_result = get_object_or_404(OMRResult, id=candidate_id, exam_identifier=exam_identifier)
+    else:
+        # exam_identifier와 학생 이름(대소문자 무시)을 통해 OMRResult 찾기
+        qs = OMRResult.objects.filter(
+            exam_identifier=exam_identifier,
+            student__name__iexact=voca_name
+        )
+        
+        if qs.count() > 1:
+            candidates = list(qs.values(
+                "id",
+                "student__student_code",
+                "student__school_name",
+                "student__name"
+            ))
+            return JsonResponse({"status": "multiple", "candidates": candidates})
+        
+        omr_result = qs.first()  
+        
+        if not omr_result:
+            return JsonResponse({"status": "error", "message": f"{voca_name} 학생을 찾을 수 없습니다."}, status=404)
+        
+    try:
+        omr_result.voca_score_earned = new_score
+        omr_result.save(update_fields=['voca_score_earned'])
+        
+        student = omr_result.student
+        student_info = {
+            "school": student.school_name if student and student.school_name else "",
+            "student_name": student.name if student else omr_result.unmatched_student_name or "미매칭"
+        }
+        
+        
+        return JsonResponse({"status": "success",
+                             "voca_score": new_score,
+                             **student_info})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
     

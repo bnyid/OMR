@@ -120,7 +120,7 @@
             <td>{{ group.latest_created_at|date:"Y-m-d H:i" }}</td>
             <td>
               <a
-                href="{% url 'omr_app:omr_result_detail_grouped' group.exam_identifier %}"
+                href="{% url 'omr_app:omr_result_grouped_detail' group.exam_identifier %}"
                 class="btn btn-sm btn-info"
               >
                 상세
@@ -191,7 +191,7 @@
             <td>{{ group.latest_created_at|date:"Y-m-d H:i" }}</td>
             <td>
               <a
-                href="{% url 'omr_app:omr_result_detail_grouped' group.exam_identifier %}"
+                href="{% url 'omr_app:omr_result_grouped_detail' group.exam_identifier %}"
                 class="btn btn-sm btn-info"
               >
                 상세

@@ -19,7 +19,7 @@ urlpatterns = [
     
     # 시험별 답안지 페이지
     path('answer-sheets/', views.omr_answer_sheet_list, name='omr_answer_sheet_list'),
-    path('answer-sheets/<str:exam_identifier>/', views.omr_result_grouped_detail, name='omr_result_detail_grouped'),
+    path('answer-sheets/<str:exam_identifier>/', views.omr_result_grouped_detail, name='omr_result_grouped_detail'),
     
     
     path('match_and_auto_grade/', views.match_and_auto_grade, name='match_and_auto_grade'),
@@ -29,6 +29,10 @@ urlpatterns = [
     path('grading_list/', views.omr_grading_list, name='omr_grading_list'),
     path('grading/<str:exam_identifier>/', views.omr_grading_detail, name='omr_grading_detail'),
     path('grade_essay/', views.grade_essay_update, name='grade_essay_update'),
+
+    # 단어점수 업데이트
+    path('update_voca_possible/', views.update_voca_possible, name='update_voca_possible'),
+    path('grade_voca/', views.grade_voca_update, name='grade_voca_update'),
 
     path('omr-result-detail/<int:result_id>/', views.omr_result_detail, name='omr_result_detail'),
 ]

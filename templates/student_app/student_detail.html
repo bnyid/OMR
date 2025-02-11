@@ -1,79 +1,99 @@
-{% extends 'base.html' %}
-
-{% block content %}
+<!-- templates/student_app/student_detail.html -->
+{% extends 'base.html' %} {% block content %}
 <div class="card mb-4">
-    <div class="card-header">
-        <h3>학생 상세 정보</h3>
+  <div class="card-header">
+    <h3>학생 상세 정보</h3>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6">
+        <table class="table">
+          <tr>
+            <th>등록일</th>
+            <td>{{ student.registered_date }}</td>
+          </tr>
+          <tr>
+            <th width="30%">학번</th>
+            <td>{{ student.student_id }}</td>
+          </tr>
+          <tr>
+            <th>이름</th>
+            <td>{{ student.name }}</td>
+          </tr>
+          <tr>
+            <th>소속반</th>
+            <td>{{ student.class_name }}</td>
+          </tr>
+          <tr>
+            <th>학교구분</th>
+            <td>{{ student.get_school_type_display }}</td>
+          </tr>
+          <tr>
+            <th>학교</th>
+            <td>{{ student.school_name }}{{ student.grade }}</td>
+          </tr>
+          <tr>
+            <th>연락처</th>
+            <td>{{ student.phone_number }}</td>
+          </tr>
+          <tr>
+            <th>보호자 연락처</th>
+            <td>{{ student.parent_phone }}</td>
+          </tr>
+        </table>
+      </div>
+      <div class="col-md-6">
+        <h5>비고</h5>
+        <p>{{ student.note|linebreaks }}</p>
+      </div>
     </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <table class="table">
-                    <tr>
-                        <th width="30%">학번</th>
-                        <td>{{ student.student_id }}</td>
-                    </tr>
-                    <tr>
-                        <th>이름</th>
-                        <td>{{ student.name }}</td>
-                    </tr>
-                    <tr>
-                        <th>소속반</th>
-                        <td>{{ student.class_name }}</td>
-                    </tr>
-                    <tr>
-                        <th>학교구분</th>
-                        <td>{{ student.get_school_type_display }}</td>
-                    </tr>
-                    <tr>
-                        <th>학교명</th>
-                        <td>{{ student.school_name }}</td>
-                    </tr>
-                    <tr>
-                        <th>학년</th>
-                        <td>{{ student.grade }}학년</td>
-                    </tr>
-                    <tr>
-                        <th>연락처</th>
-                        <td>{{ student.phone_number }}</td>
-                    </tr>
-                    <tr>
-                        <th>보호자 연락처</th>
-                        <td>{{ student.parent_phone }}</td>
-                    </tr>
-                    <tr>
-                        <th>등록일</th>
-                        <td>{{ student.registered_date }}</td>
-                    </tr>
-                </table>
-            </div>
-            <div class="col-md-6">
-                <h5>비고</h5>
-                <p>{{ student.note|linebreaks }}</p>
-            </div>
-        </div>
-    </div>
+  </div>
 </div>
 
 <div class="card">
-    <div class="card-header">
-        <h3>OMR 시험 결과 목록</h3>
+  <div class="card-header">
+    <h3>OMR 시험 결과 목록</h3>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>시험 날짜</th>
+            <th>반</th>
+            <th>시험명</th>
+            <th>석차</th>
+            <th>득점</th>
+            <th>평균점수</th>
+            <th>관리</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for omr in omr_results %}
+          <tr>
+            <td>{{ omr.exam_date }}</td>
+            <td>{{ omr.class_name }}</td>
+            <td>{{ omr.exam_sheet.title }}</td>
+            <td>{{ omr.rank }} / {{ omr.omrs_count }}명</td>
+            <td>
+              {{ omr.total_score_earned|floatformat:1 }} /
+              {{omr.total_score_possible|floatformat:0 }}
+            </td>
+
+            <td>{{ omr.average_score|floatformat:1 }}</td>
+            <td>
+              <a
+                href="{% url 'omr_app:omr_grading_detail' omr.exam_identifier %}"
+                class="btn btn-primary"
+              >
+                <i class="fas fa-eye"></i> 상세보기
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>시험 날짜</th>
-                        <th>반</th>
-                        <th>처리일시</th>
-                        <th>관리</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for result in omr_results %}
-                    <tr>
-                        <td>{{ result.exam_date }}</td>
-                        <td>{{ result.class_code }}</td>
-                        <td>{{ result.created_at|
-</file> 
+  </div>
+</div>
+{% endblock %}
